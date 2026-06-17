@@ -4,6 +4,8 @@ import type { JunctionSummary } from "@/types/junction";
 
 import { getStatusBadgeClass } from "@/lib/statusColors";
 
+import { useAppStore } from "@/store/useAppStore";
+
 function riskLabel(risk: string): string {
   return risk.charAt(0).toUpperCase() + risk.slice(1);
 }
@@ -69,6 +71,8 @@ function StatRow({ label, value }: StatRowProps) {
 }
 
 export function JunctionHoverCard({ summary }: JunctionHoverCardProps) {
+  const openResourcePanel = useAppStore((state) => state.openResourcePanel);
+
   return (
     <div className="w-[280px] rounded-xl border border-white/10 bg-elevated p-4 shadow-xl shadow-black/40">
       {/* Header: Name + Risk badge */}
@@ -97,7 +101,7 @@ export function JunctionHoverCard({ summary }: JunctionHoverCardProps) {
       <div className="mb-2 h-px bg-white/10" />
 
       {/* Stats rows */}
-      <div className="flex flex-col gap-[4px]">
+      <div className="flex flex-col gap-[4px] mb-3">
         <StatRow label="Incidents" value={summary.incident_count} />
         <StatRow label="Top Cause" value={summary.top_incident_cause} />
         <StatRow label="Peak Hours" value={summary.peak_risk_hours} />
@@ -107,6 +111,18 @@ export function JunctionHoverCard({ summary }: JunctionHoverCardProps) {
         />
         <StatRow label="Hospital Impact" value={summary.hospital_impact} />
       </div>
+
+      {/* View Resources Link/Button */}
+      <button
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openResourcePanel(summary.junction_id);
+        }}
+        className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-500/15 py-2 text-[11px] font-bold uppercase tracking-wider text-blue-400 hover:bg-blue-500/25 active:scale-[0.98] transition-all"
+      >
+        View Resources
+      </button>
     </div>
   );
 }

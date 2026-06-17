@@ -47,6 +47,24 @@ export function JunctionMarker({ junction }: JunctionMarkerProps) {
   // Refs to manage debounce timer and fetch cancellation
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchIdRef = useRef(0);
+  const hideTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelHide = useCallback(() => {
+    if (hideTimeoutRef.current !== null) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+  }, []);
+
+  const triggerHide = useCallback(() => {
+    cancelHide();
+    hideTimeoutRef.current = setTimeout(() => {
+      setIsHovered(false);
+      setSummary(null);
+      setIsLoading(false);
+      fetchIdRef.current += 1;
+    }, 300); // 300ms delay to allow moving mouse to hover card
+  }, [cancelHide]);
 
   // The custom Leaflet icon
   const markerIcon = useMemo(() => {
@@ -80,6 +98,8 @@ export function JunctionMarker({ junction }: JunctionMarkerProps) {
   }, [fillColor, isCritical, isSelected, isSimulated, junction.name, isHovered]);
 
   const handleMouseEnter = useCallback(() => {
+    cancelHide();
+    if (debounceRef.current !== null) return;
     debounceRef.current = setTimeout(() => {
       setIsHovered(true);
       
@@ -101,7 +121,7 @@ export function JunctionMarker({ junction }: JunctionMarkerProps) {
           }
         });
     }, HOVER_DEBOUNCE_MS);
-  }, [junction.id]);
+  }, [junction.id, cancelHide]);
 
   const handleMouseLeave = useCallback(() => {
     // Cancel pending debounce
@@ -109,13 +129,8 @@ export function JunctionMarker({ junction }: JunctionMarkerProps) {
       clearTimeout(debounceRef.current);
       debounceRef.current = null;
     }
-    // Immediately hide
-    setIsHovered(false);
-    setSummary(null);
-    setIsLoading(false);
-    // Invalidate any in-flight fetch
-    fetchIdRef.current += 1;
-  }, []);
+    triggerHide();
+  }, [triggerHide]);
 
   return (
     <Marker
@@ -132,11 +147,16 @@ export function JunctionMarker({ junction }: JunctionMarkerProps) {
     >
       {isHovered && (
         <Popup className="junction-leaflet-popup" closeButton={false}>
-          {isLoading || !summary ? (
-            <JunctionHoverCardSkeleton />
-          ) : (
-            <JunctionHoverCard summary={summary} />
-          )}
+          <div
+            onMouseEnter={cancelHide}
+            onMouseLeave={triggerHide}
+          >
+            {isLoading || !summary ? (
+              <JunctionHoverCardSkeleton />
+            ) : (
+              <JunctionHoverCard summary={summary} />
+            )}
+          </div>
         </Popup>
       )}
     </Marker>
