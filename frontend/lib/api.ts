@@ -10,7 +10,16 @@ export async function apiFetch<T>(
 ): Promise<T> {
   const baseUrl = getApiBaseUrl();
   const url = new URL(path, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
-  const response = await fetch(url.toString(), options);
+
+  const headers = new Headers(options.headers);
+  if (options.body && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
+  const response = await fetch(url.toString(), {
+    ...options,
+    headers,
+  });
   const body = await response.text();
 
   if (!response.ok) {
