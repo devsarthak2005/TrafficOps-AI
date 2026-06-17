@@ -1,0 +1,67 @@
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import "leaflet/dist/leaflet.css";
+@tailwind utilities;
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-base text-white antialiased;
+  margin: 0;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button {
+  font: inherit;
+}
+
+/* ------------------------------------------------------------------ */
+/* Leaflet Popup overrides for JunctionHoverCard                      */
+/* Strip the default white card/border so our dark elevated card      */
+/* renders correctly without a white matte.                           */
+/* ------------------------------------------------------------------ */
+.junction-leaflet-popup .leaflet-popup-content-wrapper {
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+}
+
+.junction-leaflet-popup .leaflet-popup-content {
+  margin: 0 !important;
+  width: auto !important;
+}
+
+.junction-leaflet-popup .leaflet-popup-tip-container {
+  display: none !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* Critical marker pulse animation                                    */
+/* ------------------------------------------------------------------ */
+@keyframes critical-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+.animate-critical-pulse {
+  animation: critical-pulse 2s infinite;
+}
+
