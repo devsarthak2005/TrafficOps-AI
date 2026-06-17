@@ -11,3 +11,4 @@ backend/data/trafficops.db
 backend/data/raw/
 .DS_Store
 Thumbs.db
+backend/.env

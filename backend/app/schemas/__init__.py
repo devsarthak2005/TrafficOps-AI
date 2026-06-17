@@ -9,6 +9,7 @@ from .junction_health import JunctionHealthResponse
 from .zone import ZoneStatusResponse
 from .simulation import SimulationRequest, SimulationResponse
 from .resource_recommendation import ResourceRecommendationResponse
+from .alert import AlertResponse, DismissResponse
 
 class HealthResponse(BaseModel):
     status: str
@@ -23,6 +24,8 @@ __all__ = [
     "ZoneStatusResponse",
     "SimulationRequest",
     "SimulationResponse",
-    "ResourceRecommendationResponse"
+    "ResourceRecommendationResponse",
+    "AlertResponse",
+    "DismissResponse"
 ]
 

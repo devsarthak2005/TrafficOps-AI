@@ -77,18 +77,21 @@ def _recency_multiplier(incident_ts: datetime, now: datetime) -> float:
     return _RECENCY_DEFAULT
 
 
-def compute_health_score(junction_id: str, include_simulated: bool = False) -> dict:
-    """Compute the real-time health score for a single junction.
+def compute_health_score(junction_id: str, include_simulated: bool = False, now: datetime | None = None) -> dict:
+    """Compute the health score for a single junction as of a specific datetime.
 
     Returns {"health_score": int, "risk_category": str}.
     If include_simulated is True, subtracts temporary penalties from active simulations.
     """
-    now = datetime.now(timezone.utc)
+    if now is None:
+        now = datetime.now(timezone.utc)
+
+    now_str = now.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     with get_cursor() as cur:
         cur.execute(
-            "SELECT severity, timestamp FROM incidents WHERE junction_id = ?",
-            (junction_id,),
+            "SELECT severity, timestamp FROM incidents WHERE junction_id = ? AND timestamp <= ?",
+            (junction_id, now_str),
         )
         rows = cur.fetchall()
 
