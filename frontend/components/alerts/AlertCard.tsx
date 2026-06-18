@@ -2,7 +2,10 @@
 
 import type { Alert } from "@/types/alert";
 import AlertTypeIcon from "./AlertTypeIcon";
-import { X } from "lucide-react";
+import { X, Loader2 } from "lucide-react";
+import { useState } from "react";
+import { getIncidents } from "@/lib/api/incidents";
+import { useAppStore } from "@/store/useAppStore";
 
 interface AlertCardProps {
   alert: Alert;
@@ -11,6 +14,8 @@ interface AlertCardProps {
 
 export default function AlertCard({ alert, onDismiss }: AlertCardProps) {
   const { alert_id, alert_type, confidence, message } = alert;
+  const [loading, setLoading] = useState(false);
+  const openSimilarPanel = useAppStore((state) => state.openSimilarPanel);
 
   // Determine left border color and text color based on confidence level (severity)
   let borderColor = "border-l-yellow-500";
@@ -27,13 +32,36 @@ export default function AlertCard({ alert, onDismiss }: AlertCardProps) {
     iconColor = "text-orange-400";
   }
 
+  const handleClick = async () => {
+    if (!alert.junction_id) return;
+    setLoading(true);
+    try {
+      const incidents = await getIncidents({ junction_id: alert.junction_id });
+      if (incidents.length > 0) {
+        // Retrieve the most recent incident
+        openSimilarPanel(incidents[0].id);
+      } else {
+        console.warn("No incidents found at junction for alert:", alert.junction_id);
+      }
+    } catch (err) {
+      console.error("Failed to fetch incidents for alert:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div
-      className={`relative flex gap-3 rounded-lg border border-slate-800/80 bg-slate-900/40 p-4 border-l-[3.5px] ${borderColor} hover:bg-slate-900/60 transition-all duration-300 group shadow-md shadow-black/10`}
+      onClick={handleClick}
+      className={`relative flex gap-3 rounded-lg border border-slate-800/80 bg-slate-900/40 p-4 border-l-[3.5px] ${borderColor} hover:bg-slate-900/60 hover:border-slate-700 transition-all duration-300 group shadow-md shadow-black/10 cursor-pointer active:scale-[0.99]`}
     >
       {/* Alert Icon */}
       <div className={`mt-0.5 shrink-0 rounded-lg bg-slate-950 p-2 border border-slate-800 ${iconColor}`}>
-        <AlertTypeIcon type={alert_type} className="h-4.5 w-4.5" />
+        {loading ? (
+          <Loader2 className="h-4 w-4 animate-spin text-blue-400" />
+        ) : (
+          <AlertTypeIcon type={alert_type} className="h-4.5 w-4.5" />
+        )}
       </div>
 
       {/* Alert content */}
@@ -56,7 +84,10 @@ export default function AlertCard({ alert, onDismiss }: AlertCardProps) {
 
       {/* Dismiss Button */}
       <button
-        onClick={() => onDismiss(alert_id)}
+        onClick={(e) => {
+          e.stopPropagation();
+          onDismiss(alert_id);
+        }}
         className="absolute top-3 right-3 rounded p-0.5 text-slate-500 hover:bg-slate-800 hover:text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity"
         aria-label="Dismiss alert"
       >

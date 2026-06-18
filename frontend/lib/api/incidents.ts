@@ -20,3 +20,8 @@ export async function getIncidents(
   const path = query ? `/incidents?${query}` : "/incidents";
   return apiFetch<Incident[]>(path);
 }
+
+export async function getIncident(id: string): Promise<Incident> {
+  return apiFetch<Incident>(`/incidents/${id}`);
+}
+

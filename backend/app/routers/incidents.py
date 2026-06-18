@@ -59,3 +59,34 @@ def list_incidents(
         )
         for row in rows
     ]
+
+
+@router.get("/incidents/{id}", response_model=IncidentResponse)
+def get_incident(id: str) -> IncidentResponse:
+    """Return a single incident by ID."""
+    from fastapi import HTTPException
+    
+    query = """
+        SELECT id, junction_id, incident_type, severity,
+               timestamp, weather, temperature_c, description
+        FROM incidents
+        WHERE id = ?
+    """
+    with get_cursor() as cur:
+        cur.execute(query, (id,))
+        row = cur.fetchone()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    return IncidentResponse(
+        id=row["id"],
+        junction_id=row["junction_id"],
+        incident_type=row["incident_type"],
+        severity=row["severity"],
+        timestamp=row["timestamp"],
+        weather=row["weather"],
+        temperature_c=row["temperature_c"],
+        description=row["description"],
+    )
+

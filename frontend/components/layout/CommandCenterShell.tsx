@@ -8,6 +8,8 @@ import { TrafficPulseBar } from "@/components/layout/TrafficPulseBar";
 import { useMapStore } from "@/store/useMapStore";
 import { useSimulationStore } from "@/store/useSimulationStore";
 import ResourceRecommendationPanel from "@/components/resources/ResourceRecommendationPanel";
+import SimilarIncidentsPanel from "@/components/incidents/SimilarIncidentsPanel";
+
 
 // Dynamically import MapView to disable SSR for Leaflet
 const MapView = dynamic(() => import("@/components/map/MapView").then(mod => mod.MapView), {
@@ -53,6 +55,8 @@ export function CommandCenterShell() {
         </section>
       </div>
       <ResourceRecommendationPanel />
+      <SimilarIncidentsPanel />
     </main>
+
   );
 }
