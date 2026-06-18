@@ -4,6 +4,7 @@ import { useMapStore } from "@/store/useMapStore";
 import { SimulatorPanel } from "@/components/simulator/SimulatorPanel";
 import { ActiveSimulationBadge } from "@/components/simulator/ActiveSimulationBadge";
 import AlertsPanel from "@/components/alerts/AlertsPanel";
+import CorridorPlannerPanel from "@/components/corridor/CorridorPlannerPanel";
 
 export function Sidebar() {
   const sidebarOpen = useMapStore((state) => state.sidebarOpen);
@@ -20,6 +21,11 @@ export function Sidebar() {
           {/* Predictive Alerts */}
           <section className="flex flex-col border-b border-white/10 pb-4">
             <AlertsPanel />
+          </section>
+
+          {/* Emergency Corridors */}
+          <section className="flex flex-col border-b border-white/10 pb-4">
+            <CorridorPlannerPanel />
           </section>
 
           {/* Zone Status Section */}

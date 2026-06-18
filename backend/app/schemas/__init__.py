@@ -10,6 +10,7 @@ from .zone import ZoneStatusResponse
 from .simulation import SimulationRequest, SimulationResponse
 from .resource_recommendation import ResourceRecommendationResponse
 from .alert import AlertResponse, DismissResponse
+from .corridor import HospitalResponse, CorridorRequest, CorridorResponse
 
 class HealthResponse(BaseModel):
     status: str
@@ -26,6 +27,9 @@ __all__ = [
     "SimulationResponse",
     "ResourceRecommendationResponse",
     "AlertResponse",
-    "DismissResponse"
+    "DismissResponse",
+    "HospitalResponse",
+    "CorridorRequest",
+    "CorridorResponse"
 ]
 

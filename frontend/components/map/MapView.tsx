@@ -9,6 +9,7 @@ import { getJunctions } from "@/lib/api/junctions";
 
 import { HeatmapLayer } from "@/components/map/HeatmapLayer";
 import { useSimulationStore } from "@/store/useSimulationStore";
+import CorridorRouteLayer from "@/components/corridor/CorridorRouteLayer";
 
 export function MapView() {
   const junctions = useMapStore((state) => state.junctions);
@@ -52,6 +53,8 @@ export function MapView() {
         />
         
         <HeatmapLayer />
+
+        <CorridorRouteLayer />
 
         {junctions.map((junction) => (
           <JunctionMarker key={junction.id} junction={junction} />

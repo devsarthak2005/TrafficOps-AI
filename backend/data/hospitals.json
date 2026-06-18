@@ -1,0 +1,38 @@
+[
+  {
+    "id": "victoria",
+    "name": "Victoria Hospital",
+    "lat": 12.9634,
+    "lng": 77.5855
+  },
+  {
+    "id": "st-johns",
+    "name": "St. John's Medical College Hospital",
+    "lat": 12.9279,
+    "lng": 77.6271
+  },
+  {
+    "id": "manipal-old-airport",
+    "name": "Manipal Hospital Old Airport Road",
+    "lat": 12.9606,
+    "lng": 77.6484
+  },
+  {
+    "id": "fortis-bg-road",
+    "name": "Fortis Hospital Bannerghatta Road",
+    "lat": 12.8916,
+    "lng": 77.5963
+  },
+  {
+    "id": "sakra",
+    "name": "Sakra World Hospital",
+    "lat": 12.9259,
+    "lng": 77.6936
+  },
+  {
+    "id": "columbia-asia-hebbal",
+    "name": "Columbia Asia Hospital Hebbal",
+    "lat": 13.0480,
+    "lng": 77.5973
+  }
+]
