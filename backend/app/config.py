@@ -15,5 +15,5 @@ CSV_PATH = RAW_DATA_DIR / "incidents.csv"
 # Load environment variables
 load_dotenv(dotenv_path=BASE_DIR / ".env")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-OSRM_BASE_URL = os.getenv("OSRM_BASE_URL", "https://router.projectosrm.org")
+OSRM_BASE_URL = os.getenv("OSRM_BASE_URL", "https://routing.openstreetmap.de/routed-car")
 
