@@ -1,0 +1,148 @@
+"use client";
+
+import { useEffect } from "react";
+import { useMLStore } from "@/store/useMLStore";
+import { BrainCircuit, Cpu, Compass, Database, Activity, ShieldCheck, History } from "lucide-react";
+
+export function AIInsightsView() {
+  const { importances, predictionHistory, fetchImportances } = useMLStore();
+
+  useEffect(() => {
+    fetchImportances();
+  }, [fetchImportances]);
+
+  return (
+    <div className="flex flex-col gap-6 p-6 h-full overflow-y-auto bg-[#080808]">
+      
+      {/* Title */}
+      <div>
+        <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+          AI Model Insights & Feature Importance <BrainCircuit className="h-5 w-5 text-blue-400" />
+        </h1>
+        <p className="text-slate-400 text-xs mt-0.5">
+          Validation diagnostics, XGBoost booster parameter structures, and global explainability metrics.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-12 gap-6 min-h-0 flex-1 animate-fadeIn">
+        {/* Left Column: Diagnostics and Importances (7 cols) */}
+        <div className="col-span-7 flex flex-col gap-6 overflow-y-auto pr-1">
+          
+          {/* Model Metrics Card */}
+          <div className="rounded-xl border border-white/5 bg-panel p-5 flex flex-col gap-4 shadow-lg">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider border-b border-white/10 pb-2 flex items-center gap-2">
+              <Cpu className="h-4 w-4 text-blue-500" /> XGBoost Classifier Performance
+            </h3>
+
+            <div className="grid grid-cols-3 gap-4">
+              {/* Highlight Recall */}
+              <div className="p-3 rounded-lg border border-blue-500/20 bg-blue-500/5 text-center relative overflow-hidden">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block">Critical Recall</span>
+                <h4 className="text-3xl font-black text-blue-400 mt-1">93%</h4>
+                <p className="text-[8px] text-slate-500 mt-1 leading-normal">Accurate forecast of escalation cases</p>
+              </div>
+
+              {/* Multiclass Accuracy */}
+              <div className="p-3 rounded-lg border border-white/5 bg-white/5 text-center">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block">Accuracy</span>
+                <h4 className="text-3xl font-black text-slate-200 mt-1">56%</h4>
+                <p className="text-[8px] text-slate-500 mt-1 leading-normal">Overall multiclass diagnostic match</p>
+              </div>
+
+              {/* F1 Score */}
+              <div className="p-3 rounded-lg border border-white/5 bg-white/5 text-center">
+                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest block">F1 Weighted</span>
+                <h4 className="text-3xl font-black text-slate-200 mt-1">68%</h4>
+                <p className="text-[8px] text-slate-500 mt-1 leading-normal">Robust balance of precision & recall</p>
+              </div>
+            </div>
+
+            <div className="flex gap-6 text-[10px] text-slate-400 font-mono mt-1 justify-around bg-black/30 p-2.5 rounded border border-white/5">
+              <span className="flex items-center gap-1.5"><Database className="h-3 w-3 text-blue-400" /> Train Rows: 3,129</span>
+              <span className="flex items-center gap-1.5"><Compass className="h-3 w-3 text-blue-400" /> Estimators: 100</span>
+              <span className="flex items-center gap-1.5"><Activity className="h-3 w-3 text-blue-400" /> Max Depth: 6</span>
+            </div>
+          </div>
+
+          {/* Global Feature Importance Chart */}
+          <div className="rounded-xl border border-white/5 bg-panel p-5 flex flex-col gap-4 shadow-lg">
+            <div className="flex justify-between items-center border-b border-white/10 pb-2">
+              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                <Activity className="h-4 w-4 text-blue-400" /> Global Feature Importance (Top Features)
+              </h3>
+              <span className="text-[10px] text-slate-500 font-mono">Dynamic API pull</span>
+            </div>
+
+            {importances.length === 0 ? (
+              <div className="text-center p-6 text-slate-500 text-xs">Loading importance matrix...</div>
+            ) : (
+              <div className="flex flex-col gap-3 max-h-[300px] overflow-y-auto pr-1">
+                {importances.map((item, idx) => (
+                  <div key={idx} className="flex flex-col gap-1 text-xs">
+                    <div className="flex justify-between text-slate-300">
+                      <span className="font-medium text-slate-300">{item.feature}</span>
+                      <span className="font-semibold text-blue-400">{item.importance}%</span>
+                    </div>
+                    <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-500/50 rounded-full" style={{ width: `${item.importance}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column: Prediction History Logs (5 cols) */}
+        <div className="col-span-5 flex flex-col gap-2 rounded-xl border border-white/5 bg-panel p-4 shadow-lg overflow-y-auto">
+          <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider border-b border-white/10 pb-2 flex items-center gap-2">
+            <History className="h-4 w-4 text-blue-400" /> Prediction Run History (Current Session)
+          </h3>
+
+          {predictionHistory.length === 0 ? (
+            <div className="flex flex-col items-center justify-center p-8 text-center text-slate-500 text-xs flex-1">
+              No predictions generated in this browser session.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {predictionHistory.map((pred, idx) => (
+                <div key={idx} className="p-3 rounded-lg bg-white/5 border border-white/5 flex flex-col gap-2 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-blue-400">{pred.cause || "EVENT"}</span>
+                    <span className="text-[10px] text-slate-500">{pred.timestamp}</span>
+                  </div>
+
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-slate-400">Predicted Impact:</span>
+                    <span className={`font-bold ${
+                      {
+                        Low: "text-emerald-400",
+                        Medium: "text-amber-400",
+                        High: "text-orange-400",
+                        Critical: "text-red-400 animate-pulse"
+                      }[pred.predicted_impact]
+                    }`}>{pred.predicted_impact}</span>
+                  </div>
+
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-slate-400">Confidence Score:</span>
+                    <span className="font-semibold text-slate-200">{Math.round(pred.confidence)}%</span>
+                  </div>
+
+                  <div className="border-t border-white/5 pt-1.5 flex flex-wrap gap-1.5">
+                    {pred.reasons.slice(0, 3).map((r, i) => (
+                      <span key={i} className="px-1.5 py-0.5 rounded bg-white/5 border border-white/5 text-[9px] text-slate-400">
+                        {r.split(" contributed")[0]}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+export default AIInsightsView;

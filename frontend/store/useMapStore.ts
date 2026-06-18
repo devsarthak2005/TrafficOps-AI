@@ -7,12 +7,14 @@ interface MapStoreState {
   mapInstance: Map | null;
   selectedJunctionId: string | null;
   sidebarOpen: boolean;
+  activeTab: 'dashboard' | 'map' | 'simulator' | 'analytics' | 'ml' | 'alerts' | 'corridors';
   junctions: Junction[];
   healthMap: Record<string, JunctionHealth>;
   setMapInstance: (map: Map | null) => void;
   setSelectedJunctionId: (junctionId: string | null) => void;
   toggleSidebar: () => void;
   setSidebarOpen: (sidebarOpen: boolean) => void;
+  setActiveTab: (tab: 'dashboard' | 'map' | 'simulator' | 'analytics' | 'ml' | 'alerts' | 'corridors') => void;
   setJunctions: (junctions: Junction[]) => void;
   setHealthMap: (healthMap: Record<string, JunctionHealth>) => void;
   fetchHealthSummary: () => Promise<void>;
@@ -22,6 +24,7 @@ export const useMapStore = create<MapStoreState>((set) => ({
   mapInstance: null,
   selectedJunctionId: null,
   sidebarOpen: true,
+  activeTab: 'dashboard',
   junctions: [],
   healthMap: {},
   setMapInstance: (mapInstance) => set({ mapInstance }),
@@ -29,6 +32,7 @@ export const useMapStore = create<MapStoreState>((set) => ({
   toggleSidebar: () =>
     set((state) => ({ sidebarOpen: !state.sidebarOpen })),
   setSidebarOpen: (sidebarOpen) => set({ sidebarOpen }),
+  setActiveTab: (activeTab) => set({ activeTab }),
   setJunctions: (junctions) => set({ junctions }),
   setHealthMap: (healthMap) => set({ healthMap }),
   fetchHealthSummary: async () => {

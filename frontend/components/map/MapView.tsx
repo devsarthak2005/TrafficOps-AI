@@ -1,27 +1,27 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { MapContainer, TileLayer } from "react-leaflet";
 import { JunctionMarker } from "@/components/map/JunctionMarker";
 import { bengaluruViewState, OSM_DARK_TILES, OSM_ATTRIBUTION } from "@/components/map/mapConfig";
 import { useMapStore } from "@/store/useMapStore";
 import { getJunctions } from "@/lib/api/junctions";
-
 import { HeatmapLayer } from "@/components/map/HeatmapLayer";
 import { useSimulationStore } from "@/store/useSimulationStore";
 import CorridorRouteLayer from "@/components/corridor/CorridorRouteLayer";
 import { getHospitalsStatus } from "@/lib/api/hospitals";
 import type { HospitalStatus } from "@/types/hospital";
 import { HospitalMarker } from "@/components/hospitals/HospitalMarker";
-import { useState } from "react";
+import { useLayersStore } from "@/store/useLayersStore";
 
 export function MapView() {
   const junctions = useMapStore((state) => state.junctions);
   const setJunctions = useMapStore((state) => state.setJunctions);
   const setMapInstance = useMapStore((state) => state.setMapInstance);
-
   const fetchHealthSummary = useMapStore((state) => state.fetchHealthSummary);
+
   const isSimulating = useSimulationStore((state) => state.isSimulating);
+  const { showHeatmap, showJunctions, showCorridors } = useLayersStore();
 
   const [hospitals, setHospitals] = useState<HospitalStatus[]>([]);
 
@@ -70,18 +70,19 @@ export function MapView() {
           attribution={OSM_ATTRIBUTION}
         />
         
-        <HeatmapLayer />
+        {showHeatmap && <HeatmapLayer />}
 
-        <CorridorRouteLayer />
+        {showCorridors && <CorridorRouteLayer />}
 
-        {junctions.map((junction) => (
+        {showJunctions && junctions.map((junction) => (
           <JunctionMarker key={junction.id} junction={junction} />
         ))}
 
-        {hospitals.map((hospital) => (
+        {showJunctions && hospitals.map((hospital) => (
           <HospitalMarker key={hospital.hospital_id} hospital={hospital} />
         ))}
       </MapContainer>
     </div>
   );
 }
+export default MapView;

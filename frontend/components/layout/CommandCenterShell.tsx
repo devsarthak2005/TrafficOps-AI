@@ -1,62 +1,160 @@
 "use client";
 
-import { useMemo, useEffect } from "react";
+import { useEffect } from "react";
 import dynamic from "next/dynamic";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { TopStatusBar } from "@/components/layout/TopStatusBar";
-import { TrafficPulseBar } from "@/components/layout/TrafficPulseBar";
 import { useMapStore } from "@/store/useMapStore";
 import { useSimulationStore } from "@/store/useSimulationStore";
+import { useLayersStore } from "@/store/useLayersStore";
+import { TopStatusBar } from "@/components/layout/TopStatusBar";
+import { DashboardView } from "@/components/dashboard/DashboardView";
+import { EventSimulatorView } from "@/components/simulator/EventSimulatorView";
+import { AnalyticsView } from "@/components/analytics/AnalyticsView";
+import { AIInsightsView } from "@/components/ml/AIInsightsView";
+import { AlertsCenterView } from "@/components/alerts/AlertsCenterView";
+import CorridorPlannerPanel from "@/components/corridor/CorridorPlannerPanel";
 import ResourceRecommendationPanel from "@/components/resources/ResourceRecommendationPanel";
 import SimilarIncidentsPanel from "@/components/incidents/SimilarIncidentsPanel";
-
+import { Layers, Eye, EyeOff, Navigation, ShieldCheck } from "lucide-react";
 
 // Dynamically import MapView to disable SSR for Leaflet
-const MapView = dynamic(() => import("@/components/map/MapView").then(mod => mod.MapView), {
-  ssr: false,
-  loading: () => (
-    <div className="flex h-full min-h-0 items-center justify-center bg-base p-6 text-slate-400">
-      Loading map...
-    </div>
-  ),
-});
+const MapView = dynamic(
+  () => import("@/components/map/MapView").then((mod) => mod.MapView),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full min-h-0 items-center justify-center bg-[#0a0a0a] p-6 text-slate-400 font-mono text-xs">
+        Loading spatial environment...
+      </div>
+    ),
+  }
+);
 
 export function CommandCenterShell() {
-  const sidebarOpen = useMapStore((state) => state.sidebarOpen);
-  const shellColumns = useMemo(
-    () =>
-      sidebarOpen
-        ? "grid-cols-[320px_minmax(0,1fr)]"
-        : "grid-cols-[0px_minmax(0,1fr)]",
-    [sidebarOpen]
-  );
-
+  const activeTab = useMapStore((state) => state.activeTab);
+  const mapInstance = useMapStore((state) => state.mapInstance);
   const fetchActiveSimulations = useSimulationStore((state) => state.fetchActiveSimulations);
+
+  // Layers Toggles
+  const { showHeatmap, showJunctions, showCorridors, toggleLayer } = useLayersStore();
 
   // Poll for active simulations
   useEffect(() => {
-    fetchActiveSimulations(); // initial fetch
+    fetchActiveSimulations();
     const interval = window.setInterval(() => {
       fetchActiveSimulations();
     }, 5000);
     return () => window.clearInterval(interval);
   }, [fetchActiveSimulations]);
 
+  // Leaflet InvalidateSize Hack to prevent grey zones on viewport switch
+  useEffect(() => {
+    if (mapInstance && (activeTab === "map" || activeTab === "corridors")) {
+      const timer = setTimeout(() => {
+        mapInstance.invalidateSize();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, mapInstance]);
+
+  // Quick Map Fly-to helper for judges
+  const flyToJunction = (lat: number, lng: number, zoom = 14) => {
+    if (mapInstance) {
+      mapInstance.flyTo([lat, lng], zoom, { animate: true, duration: 1.5 });
+    }
+  };
+
+  const isMapTabActive = activeTab === "map" || activeTab === "corridors";
+
   return (
-    <main className="flex h-screen flex-col overflow-hidden bg-base text-white">
+    <main className="flex h-screen w-screen flex-col overflow-hidden bg-[#080808] text-white">
+      {/* Top Status & Navigation Header */}
       <TopStatusBar />
-      <TrafficPulseBar />
-      <div
-        className={`grid flex-1 min-h-0 overflow-hidden transition-[grid-template-columns] duration-300 ease-in-out ${shellColumns}`}
-      >
-        <Sidebar />
-        <section className="min-h-0 overflow-hidden bg-base">
+
+      {/* Primary Workspace container */}
+      <div className="flex-1 min-h-0 w-full overflow-hidden relative">
+        
+        {/* Fullscreen Map (mounted globally at all times) */}
+        <div className={`h-full w-full transition-all duration-300 ${isMapTabActive ? "opacity-100 visible z-0" : "opacity-0 invisible -z-50 pointer-events-none absolute"}`}>
           <MapView />
-        </section>
+        </div>
+
+        {/* Live Map Overlay Controls */}
+        {activeTab === "map" && (
+          <div className="absolute top-6 right-6 z-10 flex flex-col gap-4 max-w-xs animate-fadeIn">
+            {/* Layers Toggle Card */}
+            <div className="rounded-xl border border-white/10 bg-panel/90 p-4 backdrop-blur-md shadow-2xl flex flex-col gap-3 w-56">
+              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider border-b border-white/10 pb-1.5 flex items-center gap-1.5">
+                <Layers className="h-3.5 w-3.5 text-blue-400" /> Layer Controllers
+              </h3>
+              
+              <div className="flex flex-col gap-2">
+                {[
+                  { id: "showHeatmap" as const, label: "Congestion Heatmap", state: showHeatmap },
+                  { id: "showJunctions" as const, label: "Junction Indicators", state: showJunctions },
+                  { id: "showCorridors" as const, label: "Hospital Corridors", state: showCorridors },
+                ].map((layer) => (
+                  <button
+                    key={layer.id}
+                    onClick={() => toggleLayer(layer.id)}
+                    className="flex items-center justify-between text-xs text-slate-300 hover:text-white py-1 transition"
+                  >
+                    <span>{layer.label}</span>
+                    {layer.state ? (
+                      <Eye className="h-4 w-4 text-blue-400" />
+                    ) : (
+                      <EyeOff className="h-4 w-4 text-slate-500" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Quick Fly-To Viewports */}
+            <div className="rounded-xl border border-white/10 bg-panel/90 p-4 backdrop-blur-md shadow-2xl flex flex-col gap-2 w-56">
+              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Navigation className="h-3.5 w-3.5 text-blue-400" /> Fly-to Viewports
+              </h3>
+              <div className="grid grid-cols-1 gap-1">
+                <button
+                  onClick={() => flyToJunction(12.9176, 77.6246, 14.5)}
+                  className="px-2.5 py-1.5 rounded bg-white/5 border border-white/5 text-[11px] text-slate-300 hover:bg-white/10 text-left font-semibold"
+                >
+                  Silk Board Junction
+                </button>
+                <button
+                  onClick={() => flyToJunction(12.9226, 77.6174, 14.5)}
+                  className="px-2.5 py-1.5 rounded bg-white/5 border border-white/5 text-[11px] text-slate-300 hover:bg-white/10 text-left font-semibold"
+                >
+                  Central Zone Hub
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Emergency Corridors Overlay Panel */}
+        {activeTab === "corridors" && (
+          <div className="absolute top-6 left-6 z-10 bg-panel/95 border border-white/10 p-5 rounded-xl backdrop-blur-md shadow-2xl w-[320px] max-h-[calc(100vh-120px)] overflow-y-auto animate-fadeIn">
+            <CorridorPlannerPanel />
+          </div>
+        )}
+
+        {/* Static Content Pages overlays */}
+        {!isMapTabActive && (
+          <div className="absolute inset-0 h-full w-full bg-[#080808] z-10">
+            {activeTab === "dashboard" && <DashboardView />}
+            {activeTab === "simulator" && <EventSimulatorView />}
+            {activeTab === "analytics" && <AnalyticsView />}
+            {activeTab === "ml" && <AIInsightsView />}
+            {activeTab === "alerts" && <AlertsCenterView />}
+          </div>
+        )}
+
       </div>
+
+      {/* Global Slide-over panel overlays */}
       <ResourceRecommendationPanel />
       <SimilarIncidentsPanel />
     </main>
-
   );
 }
