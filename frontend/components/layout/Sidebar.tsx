@@ -5,6 +5,7 @@ import { SimulatorPanel } from "@/components/simulator/SimulatorPanel";
 import { ActiveSimulationBadge } from "@/components/simulator/ActiveSimulationBadge";
 import AlertsPanel from "@/components/alerts/AlertsPanel";
 import CorridorPlannerPanel from "@/components/corridor/CorridorPlannerPanel";
+import { HospitalStatusList } from "@/components/hospitals/HospitalStatusList";
 
 export function Sidebar() {
   const sidebarOpen = useMapStore((state) => state.sidebarOpen);
@@ -26,6 +27,14 @@ export function Sidebar() {
           {/* Emergency Corridors */}
           <section className="flex flex-col border-b border-white/10 pb-4">
             <CorridorPlannerPanel />
+          </section>
+
+          {/* Hospital Reachability Monitor */}
+          <section className="flex flex-col border-b border-white/10 pb-4">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
+              Hospitals Reachability
+            </h2>
+            <HospitalStatusList />
           </section>
 
           {/* Zone Status Section */}

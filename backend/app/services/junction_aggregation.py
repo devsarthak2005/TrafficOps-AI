@@ -13,6 +13,8 @@ import pandas as pd
 
 from ..db import get_cursor
 from .health_score import compute_health_score
+from .hospitals import get_all_hospitals
+from .hospital_reachability import get_hospital_access_junctions, compute_hospital_accessibility
 
 # Approximate clearance times in minutes per severity level.
 # NOTE: This is a deterministic approximation — real clearance data is not
@@ -110,8 +112,20 @@ def get_junction_summary(junction_id: str, include_simulated: bool = False) -> d
     peak_risk_hours = _compute_peak_risk_hours(df)
     avg_clearance_time_minutes = _compute_avg_clearance(df)
 
-    # Placeholder: hospital impact — Phase 11 replaces this
-    hospital_impact = "Not assessed"  # placeholder — Phase 11
+    # Compute real hospital impact
+    hospitals = get_all_hospitals()
+    impacted_hospitals = []
+    for h in hospitals:
+        access_junctions = get_hospital_access_junctions(h, n=2)
+        if any(j["id"] == junction_id for j in access_junctions):
+            status = compute_hospital_accessibility(h["id"], include_simulated=include_simulated)
+            band_str = status["accessibility_band"].replace("_", " ").title()
+            impacted_hospitals.append(f"{h['name']} ({band_str})")
+            
+    if impacted_hospitals:
+        hospital_impact = f"Access point for {', '.join(impacted_hospitals)}"
+    else:
+        hospital_impact = "None"
 
     # Real health score from Phase 5 engine
     health_result = compute_health_score(junction_id, include_simulated)

@@ -10,6 +10,10 @@ import { getJunctions } from "@/lib/api/junctions";
 import { HeatmapLayer } from "@/components/map/HeatmapLayer";
 import { useSimulationStore } from "@/store/useSimulationStore";
 import CorridorRouteLayer from "@/components/corridor/CorridorRouteLayer";
+import { getHospitalsStatus } from "@/lib/api/hospitals";
+import type { HospitalStatus } from "@/types/hospital";
+import { HospitalMarker } from "@/components/hospitals/HospitalMarker";
+import { useState } from "react";
 
 export function MapView() {
   const junctions = useMapStore((state) => state.junctions);
@@ -18,6 +22,8 @@ export function MapView() {
 
   const fetchHealthSummary = useMapStore((state) => state.fetchHealthSummary);
   const isSimulating = useSimulationStore((state) => state.isSimulating);
+
+  const [hospitals, setHospitals] = useState<HospitalStatus[]>([]);
 
   useEffect(() => {
     async function load() {
@@ -31,6 +37,18 @@ export function MapView() {
     }
     load();
   }, [setJunctions, fetchHealthSummary]);
+
+  useEffect(() => {
+    async function loadHospitals() {
+      try {
+        const data = await getHospitalsStatus(isSimulating);
+        setHospitals(data);
+      } catch (err) {
+        console.error("Failed to load hospitals:", err);
+      }
+    }
+    loadHospitals();
+  }, [isSimulating]);
 
   // Re-fetch health summary when simulation state changes
   useEffect(() => {
@@ -58,6 +76,10 @@ export function MapView() {
 
         {junctions.map((junction) => (
           <JunctionMarker key={junction.id} junction={junction} />
+        ))}
+
+        {hospitals.map((hospital) => (
+          <HospitalMarker key={hospital.hospital_id} hospital={hospital} />
         ))}
       </MapContainer>
     </div>

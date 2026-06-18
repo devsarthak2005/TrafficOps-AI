@@ -10,6 +10,8 @@ from .gemini_client import generate_explanation
 from .zones import JUNCTION_ZONES
 from .resource_engine import recommend_resources
 from .simulation_engine import get_active_simulations
+from .hospitals import get_all_hospitals
+from .hospital_reachability import compute_hospital_accessibility
 
 logger = logging.getLogger(__name__)
 
@@ -89,32 +91,34 @@ def detect_escalation_alerts(junctions: list[dict], name_map: dict[str, str]) ->
 
 
 def detect_hospital_corridor_alerts(junctions: list[dict], name_map: dict[str, str]) -> list[dict]:
-    """Detect critical/watchlist risk on known hospital-adjacent corridors."""
+    """Detect critical/at_risk risk on real computed hospital accessibility."""
     alerts = []
     now = datetime.now(timezone.utc)
 
-    for j_id in HOSPITAL_ADJACENT_JUNCTIONS:
-        if j_id not in name_map:
-            continue
-        j_name = name_map[j_id]
-        
-        health = compute_health_score(j_id, include_simulated=True, now=now)
-        risk_category = health["risk_category"]
+    hospitals = get_all_hospitals()
+    for h in hospitals:
+        status = compute_hospital_accessibility(h["id"], include_simulated=True, now=now)
+        band = status["accessibility_band"]
 
-        if risk_category in ("watchlist", "critical"):
-            confidence = 90 if risk_category == "critical" else 75
+        if band in ("at_risk", "critical"):
+            confidence = 90 if band == "critical" else 75
+            h_name = h["name"]
+            
             prompt = (
                 f"Explain to a traffic operator why there is an alert: Hospital access corridor at risk. "
-                f"{j_name} is currently at a {risk_category} risk level. Keep the response to a single short sentence."
+                f"{h_name} accessibility is currently at a {band} level. Keep the response to a single short sentence."
             )
-            fallback = f"Hospital access corridor at risk: {j_name} is currently at {risk_category} level."
+            fallback = f"Hospital access corridor at risk: {h_name} accessibility is currently at {band} level."
             message = generate_explanation(prompt, fallback)
 
+            first_junction_id = status["access_junctions"][0]["junction_id"] if status["access_junctions"] else h["id"]
+            first_junction_name = status["access_junctions"][0]["junction_name"] if status["access_junctions"] else h_name
+
             alerts.append({
-                "alert_id": generate_alert_id(j_id, "hospital_corridor"),
+                "alert_id": generate_alert_id(h["id"], "hospital_corridor"),
                 "alert_type": "hospital_corridor",
-                "junction_id": j_id,
-                "junction_name": j_name,
+                "junction_id": first_junction_id,
+                "junction_name": first_junction_name,
                 "confidence": confidence,
                 "message": message,
                 "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
