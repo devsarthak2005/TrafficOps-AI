@@ -7,14 +7,14 @@ interface MapStoreState {
   mapInstance: Map | null;
   selectedJunctionId: string | null;
   sidebarOpen: boolean;
-  activeTab: 'dashboard' | 'map' | 'simulator' | 'analytics' | 'ml' | 'alerts' | 'corridors';
+  activeTab: 'dashboard' | 'map' | 'simulator' | 'analytics' | 'ml' | 'alerts' | 'corridors' | 'replay';
   junctions: Junction[];
   healthMap: Record<string, JunctionHealth>;
   setMapInstance: (map: Map | null) => void;
   setSelectedJunctionId: (junctionId: string | null) => void;
   toggleSidebar: () => void;
   setSidebarOpen: (sidebarOpen: boolean) => void;
-  setActiveTab: (tab: 'dashboard' | 'map' | 'simulator' | 'analytics' | 'ml' | 'alerts' | 'corridors') => void;
+  setActiveTab: (tab: 'dashboard' | 'map' | 'simulator' | 'analytics' | 'ml' | 'alerts' | 'corridors' | 'replay') => void;
   setJunctions: (junctions: Junction[]) => void;
   setHealthMap: (healthMap: Record<string, JunctionHealth>) => void;
   fetchHealthSummary: () => Promise<void>;

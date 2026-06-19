@@ -17,6 +17,8 @@ import { DiversionPlannerCard } from "@/components/simulator/DiversionPlannerCar
 import ResourceRecommendationPanel from "@/components/resources/ResourceRecommendationPanel";
 import SimilarIncidentsPanel from "@/components/incidents/SimilarIncidentsPanel";
 import { Layers, Eye, EyeOff, Navigation, ShieldCheck } from "lucide-react";
+import ReplayHistoryPanel from "@/components/replay/ReplayHistoryPanel";
+import ReplayView from "@/components/replay/ReplayView";
 
 // Dynamically import MapView to disable SSR for Leaflet
 const MapView = dynamic(
@@ -51,7 +53,7 @@ export function CommandCenterShell() {
 
   // Leaflet InvalidateSize Hack to prevent grey zones on viewport switch
   useEffect(() => {
-    if (mapInstance && (activeTab === "map" || activeTab === "corridors")) {
+    if (mapInstance && (activeTab === "map" || activeTab === "corridors" || activeTab === "replay")) {
       const timer = setTimeout(() => {
         mapInstance.invalidateSize();
       }, 100);
@@ -66,7 +68,7 @@ export function CommandCenterShell() {
     }
   };
 
-  const isMapTabActive = activeTab === "map" || activeTab === "corridors";
+  const isMapTabActive = activeTab === "map" || activeTab === "corridors" || activeTab === "replay";
 
   return (
     <main className="flex h-screen w-screen flex-col overflow-hidden bg-[#080808] text-white">
@@ -167,6 +169,21 @@ export function CommandCenterShell() {
               {corridorSubTab === "diversion" && <DiversionPlannerCard />}
             </div>
           </div>
+        )}
+
+        {/* Historical Replay Overlay Panels */}
+        {activeTab === "replay" && (
+          <>
+            {/* Left Panel: History list */}
+            <div className="absolute top-6 left-6 z-10 w-[340px] h-[calc(100vh-120px)] animate-fadeIn">
+              <ReplayHistoryPanel />
+            </div>
+
+            {/* Right Panel: Audit Report & Playback controls */}
+            <div className="absolute top-6 right-6 z-10 w-[440px] h-[calc(100vh-120px)] animate-fadeIn">
+              <ReplayView />
+            </div>
+          </>
         )}
 
         {/* Static Content Pages overlays */}

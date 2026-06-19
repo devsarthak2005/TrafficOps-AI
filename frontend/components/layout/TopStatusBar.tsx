@@ -10,7 +10,8 @@ import {
   BrainCircuit, 
   BellRing, 
   Route, 
-  Clock 
+  Clock,
+  History
 } from "lucide-react";
 
 function formatClock(date: Date) {
@@ -30,6 +31,7 @@ const NAV_ITEMS = [
   { id: "ml", label: "AI Insights", icon: BrainCircuit },
   { id: "alerts", label: "Alerts Center", icon: BellRing },
   { id: "corridors", label: "Emergency Corridors", icon: Route },
+  { id: "replay", label: "Historical Replay", icon: History },
 ] as const;
 
 export function TopStatusBar() {

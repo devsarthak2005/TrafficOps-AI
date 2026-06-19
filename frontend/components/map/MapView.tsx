@@ -14,12 +14,14 @@ import { getHospitalsStatus } from "@/lib/api/hospitals";
 import type { HospitalStatus } from "@/types/hospital";
 import { HospitalMarker } from "@/components/hospitals/HospitalMarker";
 import { useLayersStore } from "@/store/useLayersStore";
+import ReplayMapLayer from "@/components/map/ReplayMapLayer";
 
 export function MapView() {
   const junctions = useMapStore((state) => state.junctions);
   const setJunctions = useMapStore((state) => state.setJunctions);
   const setMapInstance = useMapStore((state) => state.setMapInstance);
   const fetchHealthSummary = useMapStore((state) => state.fetchHealthSummary);
+  const activeTab = useMapStore((state) => state.activeTab);
 
   const isSimulating = useSimulationStore((state) => state.isSimulating);
   const { showHeatmap, showJunctions, showCorridors } = useLayersStore();
@@ -71,19 +73,21 @@ export function MapView() {
           attribution={OSM_ATTRIBUTION}
         />
         
-        {showHeatmap && <HeatmapLayer />}
-
-        {showCorridors && <CorridorRouteLayer />}
-
-        <DiversionRouteLayer />
-
-        {showJunctions && junctions.map((junction) => (
-          <JunctionMarker key={junction.id} junction={junction} />
-        ))}
-
-        {showJunctions && hospitals.map((hospital) => (
-          <HospitalMarker key={hospital.hospital_id} hospital={hospital} />
-        ))}
+        {activeTab === "replay" ? (
+          <ReplayMapLayer />
+        ) : (
+          <>
+            {showHeatmap && <HeatmapLayer />}
+            {showCorridors && <CorridorRouteLayer />}
+            <DiversionRouteLayer />
+            {showJunctions && junctions.map((junction) => (
+              <JunctionMarker key={junction.id} junction={junction} />
+            ))}
+            {showJunctions && hospitals.map((hospital) => (
+              <HospitalMarker key={hospital.hospital_id} hospital={hospital} />
+            ))}
+          </>
+        )}
       </MapContainer>
     </div>
   );
