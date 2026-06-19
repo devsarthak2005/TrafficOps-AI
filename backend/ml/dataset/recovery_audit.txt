@@ -1,0 +1,59 @@
+Total Rows: 8173
+Missing Datetimes (removed): 5032
+Negative/Zero Durations (removed): 4
+99th Percentile: 110773.73 minutes
+Outliers above P99 (removed): 31
+Total Rows Removed: 5067
+Remaining Clean Rows: 3106
+
+Target Statistics (Clean):
+  Mean: 4951.76 min
+  Median: 64.13 min
+  Min: 0.70 min
+  Max: 110773.73 min
+  P95: 33272.25 min
+
+Duplicate Rows: {duplicates}
+
+Category Cardinalities:
+  event_cause: 17 unique values (e.g. ['water_logging', 'others', 'vip_movement', 'pot_holes', 'debris'])
+  event_type: 2 unique values (e.g. ['planned', 'unplanned'])
+  priority: 2 unique values (e.g. ['High', 'Low'])
+  zone: 10 unique values (e.g. ['South Zone 1', 'South Zone 2', 'North Zone 2', 'Central Zone 2', 'West Zone 1'])
+  corridor: 22 unique values (e.g. ['ORR East 2', 'Non-corridor', 'ORR West 1', 'Bellary Road 1', 'Mysore Road'])
+  junction: 294 unique values (e.g. ['JP Nagar 9th cross-24th main jn', 'IndianExpressJunction', 'SindhiColonyJunction', 'PeenyaPoliceStation', 'MICO Bande'])
+
+Null counts per column:
+  endlatitude: 169
+  endlongitude: 169
+  address: 3
+  end_address: 7486
+  end_datetime: 7683
+  map_file: 8173
+  direction: 8130
+  description: 1360
+  veh_type: 3286
+  veh_no: 3287
+  corridor: 20
+  priority: 2
+  cargo_material: 7897
+  reason_breakdown: 7897
+  age_of_truck: 7897
+  route_path: 8036
+  created_by_id: 2
+  last_modified_by_id: 3
+  assigned_to_police_id: 8045
+  citizen_accident_id: 8045
+  comment: 8173
+  meta_data: 8173
+  kgid: 259
+  resolved_at_address: 8099
+  resolved_at_latitude: 8099
+  resolved_at_longitude: 8099
+  closed_by_id: 5032
+  closed_datetime: 5032
+  resolved_by_id: 8099
+  resolved_datetime: 8099
+  gba_identifier: 4729
+  zone: 4729
+  junction: 5663

@@ -7,6 +7,8 @@ from ..schemas.prediction import (
     PredictionResponse,
     FeatureImportanceItem,
     FeatureImportanceResponse,
+    RecoveryTimeRequest,
+    RecoveryTimeResponse,
 )
 from ..services.predictor import predictor_service
 from ..services.recommendation_engine import get_recommendations
@@ -42,3 +44,15 @@ def get_global_importances() -> FeatureImportanceResponse:
     importances = predictor_service.get_global_feature_importances()
     items = [FeatureImportanceItem(**item) for item in importances]
     return FeatureImportanceResponse(importances=items)
+
+
+@router.post("/ml/recovery-time", response_model=RecoveryTimeResponse)
+def predict_incident_recovery_time(request: RecoveryTimeRequest) -> RecoveryTimeResponse:
+    """
+    Predict the incident duration/recovery time in minutes based on pre-resolution inputs.
+    """
+    duration = predictor_service.predict_recovery_time(request.dict())
+    return RecoveryTimeResponse(
+        duration_minutes=duration,
+        model_version="1.0"
+    )

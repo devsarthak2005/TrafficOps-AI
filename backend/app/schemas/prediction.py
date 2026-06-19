@@ -1,16 +1,41 @@
 from __future__ import annotations
 
 from typing import List
-from pydantic import BaseModel
+from enum import Enum
+from pydantic import BaseModel, Field
+
+
+class EventType(str, Enum):
+    unplanned = "unplanned"
+    planned = "planned"
+
+
+class EventCause(str, Enum):
+    vehicle_breakdown = "vehicle_breakdown"
+    others = "others"
+    tree_fall = "tree_fall"
+    accident = "accident"
+    public_event = "public_event"
+    waterlogging = "waterlogging"
+    pothole = "pothole"
+    congestion = "congestion"
+    construction = "construction"
+    road_conditions = "road_conditions"
+    vip_movement = "vip_movement"
+    procession = "procession"
+    protest = "protest"
+    debris = "debris"
+    fog_low_visibility = "fog / low visibility"
+    test_demo = "test_demo"
 
 
 class PredictionRequest(BaseModel):
-    event_cause: str
-    event_type: str
+    event_cause: EventCause
+    event_type: EventType
     priority: str
     requires_road_closure: bool
-    latitude: float
-    longitude: float
+    latitude: float = Field(..., ge=12.7, le=13.2)
+    longitude: float = Field(..., ge=77.4, le=77.8)
     start_datetime: str  # ISO 8601 formatted datetime string, e.g. "2026-06-18T18:30:00+05:30"
 
 
@@ -29,3 +54,21 @@ class FeatureImportanceItem(BaseModel):
 
 class FeatureImportanceResponse(BaseModel):
     importances: List[FeatureImportanceItem]
+
+
+class RecoveryTimeRequest(BaseModel):
+    event_cause: EventCause
+    event_type: EventType
+    priority: str
+    requires_road_closure: bool
+    latitude: float = Field(..., ge=12.7, le=13.2)
+    longitude: float = Field(..., ge=77.4, le=77.8)
+    zone: str
+    corridor: str
+    junction: str
+    start_datetime: str
+
+
+class RecoveryTimeResponse(BaseModel):
+    duration_minutes: int
+    model_version: str = "1.0"

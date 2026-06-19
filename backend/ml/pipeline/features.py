@@ -32,6 +32,43 @@ class TemporalFeatureExtractor(BaseEstimator, TransformerMixin):
         X_out = X_out.drop('start_datetime', axis=1)
         return X_out
 
+class LeakageFreeFeatureExtractor(BaseEstimator, TransformerMixin):
+    def __init__(self, n_clusters=8):
+        self.n_clusters = n_clusters
+        self.kmeans = KMeans(n_clusters=self.n_clusters, random_state=42, n_init='auto')
+        
+    def fit(self, X, y=None):
+        coords = X[['latitude', 'longitude']].fillna(0)
+        self.kmeans.fit(coords)
+        return self
+        
+    def transform(self, X):
+        X_out = X.copy()
+        dt = pd.to_datetime(X_out['start_datetime'], errors='coerce', utc=True)
+        
+        hour = dt.dt.hour.fillna(12)
+        dayofweek = dt.dt.dayofweek.fillna(0)
+        month = dt.dt.month.fillna(6)
+        
+        X_out['hour_sin'] = np.sin(hour * (2. * np.pi / 24))
+        X_out['hour_cos'] = np.cos(hour * (2. * np.pi / 24))
+        X_out['day_sin'] = np.sin(dayofweek * (2. * np.pi / 7))
+        X_out['day_cos'] = np.cos(dayofweek * (2. * np.pi / 7))
+        X_out['month'] = month
+        X_out['is_weekend'] = (dayofweek >= 5).astype(int)
+        
+        coords = X_out[['latitude', 'longitude']].fillna(0)
+        X_out['location_cluster'] = self.kmeans.predict(coords)
+        
+        priority_map = {'Low': 0, 'High': 1, 'Unknown': 0}
+        X_out['priority_encoded'] = X_out['priority'].map(priority_map).fillna(0)
+        X_out['requires_road_closure'] = X_out['requires_road_closure'].astype(int)
+        
+        X_out = X_out.drop(columns=['start_datetime', 'priority'])
+        return X_out
+
+from sklearn.cluster import KMeans
+
 def build_feature_pipeline() -> Pipeline:
     """Builds and returns the scikit-learn feature engineering pipeline."""
     
@@ -57,3 +94,4 @@ def build_feature_pipeline() -> Pipeline:
     ])
     
     return pipeline
+

@@ -4,6 +4,7 @@ import os
 import sys
 import logging
 from typing import Dict, Any, List
+from fastapi import HTTPException
 
 logger = logging.getLogger(__name__)
 
@@ -14,51 +15,75 @@ class PredictorService:
         self.model = None
         self.feature_names = None
         self.is_loaded = False
+        self.load_error = None
+        
+        self.recovery_preprocessor = None
+        self.recovery_model = None
+        self.is_loaded_recovery = False
+        self.load_error_recovery = None
+        
         self._load_models()
 
     def _load_models(self):
-        """Lazily load the preprocessor and model from backend/models/."""
+        """Lazily load the preprocessors and models from backend/models/."""
         current_dir = os.path.dirname(os.path.abspath(__file__))
         
-        # Ensure ml/pipeline is in sys.path to unpickle TemporalFeatureExtractor
+        # Ensure ml/pipeline is in sys.path to unpickle LeakageFreeFeatureExtractor
         pipeline_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "ml", "pipeline"))
         if pipeline_dir not in sys.path:
             sys.path.append(pipeline_dir)
 
         models_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "models"))
-        preprocessor_path = os.path.join(models_dir, "feature_pipeline.joblib")
-        model_path = os.path.join(models_dir, "xgboost_impact_model.joblib")
+        
+        # 1. Load Severity Classifier
+        preprocessor_path = os.path.join(models_dir, "severity_preprocessor.joblib")
+        model_path = os.path.join(models_dir, "severity_model.joblib")
 
-        logger.info(f"Loading preprocessor from {preprocessor_path}")
-        logger.info(f"Loading model from {model_path}")
+        logger.info(f"Loading severity preprocessor from {preprocessor_path}")
+        logger.info(f"Loading severity model from {model_path}")
 
         try:
             import joblib
             if os.path.exists(preprocessor_path) and os.path.exists(model_path):
                 self.preprocessor = joblib.load(preprocessor_path)
                 self.model = joblib.load(model_path)
-                self.feature_names = self.preprocessor.named_steps['preprocessor'].get_feature_names_out()
+                self.feature_names = self.preprocessor.named_steps['col_transformer'].get_feature_names_out()
                 self.is_loaded = True
-                logger.info("Successfully loaded ML model and preprocessor.")
+                logger.info("Successfully loaded ML severity classifier model and preprocessor.")
             else:
-                logger.warning("ML model or preprocessor files not found. Predictor service running in fallback mode.")
+                logger.error(f"Severity model or preprocessor files not found at {models_dir}")
         except Exception as e:
-            logger.error(f"Failed to load ML model: {e}", exc_info=True)
+            self.load_error = e
+            logger.exception("Failed to load ML severity model.")
+
+        # 2. Load Recovery Time Regressor
+        recovery_preprocessor_path = os.path.join(models_dir, "recovery_time_preprocessor.joblib")
+        recovery_model_path = os.path.join(models_dir, "recovery_time_model.joblib")
+
+        logger.info(f"Loading recovery preprocessor from {recovery_preprocessor_path}")
+        logger.info(f"Loading recovery model from {recovery_model_path}")
+
+        try:
+            import joblib
+            if os.path.exists(recovery_preprocessor_path) and os.path.exists(recovery_model_path):
+                self.recovery_preprocessor = joblib.load(recovery_preprocessor_path)
+                self.recovery_model = joblib.load(recovery_model_path)
+                self.is_loaded_recovery = True
+                logger.info("Successfully loaded ML recovery regressor model and preprocessor.")
+            else:
+                logger.error(f"Recovery model or preprocessor files not found at {models_dir}")
+        except Exception as e:
+            self.load_error_recovery = e
+            logger.exception("Failed to load ML recovery model.")
 
     def predict(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Runs prediction for the given event input.
+        Runs severity prediction for the given event input.
         Returns predicted impact level, confidence percentage, local feature reasons, and formatted explanation text.
         """
-        # Fallback if model could not be loaded
         if not self.is_loaded:
-            logger.warning("ML predictor not loaded. Returning fallback prediction.")
-            return {
-                "predicted_impact": "Medium",
-                "confidence": 50.0,
-                "reasons": ["Fallback baseline: Model files not loaded."],
-                "explanation": "Predicted Impact: Medium\nConfidence: 50%\n\nReasons:\n* Fallback baseline: Model files not loaded."
-            }
+            logger.error("Prediction failed: ML severity predictor is not loaded.")
+            raise HTTPException(status_code=503, detail="Prediction model unavailable")
 
         import pandas as pd
         import numpy as np
@@ -105,10 +130,10 @@ class PredictorService:
                 'num__day_sin': 'Day of week',
                 'num__day_cos': 'Day of week',
                 'num__is_weekend': 'Weekend timing',
-                'bool__requires_road_closure': 'Requires road closure',
-                'cat__priority_High': 'High priority event',
-                'cat__priority_Low': 'Low priority event',
-                'cat__priority_Medium': 'Medium priority event',
+                'num__requires_road_closure': 'Requires road closure',
+                'num__priority_encoded': 'High priority event',
+                'num__location_cluster': 'Location hotspot cluster',
+                'num__month': 'Seasonal factor',
                 'cat__event_type_planned': 'Public event',
                 'cat__event_type_unplanned': 'Unplanned event',
             }
@@ -168,13 +193,40 @@ class PredictorService:
             }
 
         except Exception as e:
-            logger.error(f"Error during prediction: {e}", exc_info=True)
-            return {
-                "predicted_impact": "Low",
-                "confidence": 100.0,
-                "reasons": [f"Error during explanation generation: {str(e)}"],
-                "explanation": f"Predicted Impact: Low\nConfidence: 100%\n\nReasons:\n* Error during explanation generation: {str(e)}"
-            }
+            logger.exception("Error during prediction processing.")
+            raise HTTPException(status_code=503, detail="Prediction model unavailable")
+
+    def predict_recovery_time(self, request_data: Dict[str, Any]) -> int:
+        """
+        Runs recovery time prediction for the given event input.
+        Returns predicted duration in minutes.
+        """
+        if not self.is_loaded_recovery:
+            logger.error("Prediction failed: ML recovery time predictor is not loaded.")
+            raise HTTPException(status_code=503, detail="Prediction model unavailable")
+
+        import pandas as pd
+
+        # Prepare raw inputs into a DataFrame
+        input_df = pd.DataFrame([{
+            'event_cause': request_data.get('event_cause'),
+            'event_type': request_data.get('event_type'),
+            'priority': request_data.get('priority'),
+            'requires_road_closure': bool(request_data.get('requires_road_closure')),
+            'latitude': float(request_data.get('latitude')),
+            'longitude': float(request_data.get('longitude')),
+            'start_datetime': pd.to_datetime(request_data.get('start_datetime'))
+        }])
+
+        try:
+            # Transform and predict
+            X_trans = self.recovery_preprocessor.transform(input_df)
+            pred = self.recovery_model.predict(X_trans)[0]
+            # Ensure predicted recovery time is non-negative
+            return max(0, int(round(float(pred))))
+        except Exception as e:
+            logger.exception("Error during recovery time prediction.")
+            raise HTTPException(status_code=503, detail="Prediction model unavailable")
 
     def get_global_feature_importances(self) -> List[Dict[str, Any]]:
         """Returns the global feature importances mapped to human-readable names."""
@@ -191,11 +243,11 @@ class PredictorService:
                 'num__hour_cos': 'Peak hour (time cycle)',
                 'num__day_sin': 'Day of week (weekly cycle)',
                 'num__day_cos': 'Day of week (weekly cycle)',
+                'num__month': 'Seasonal factor',
                 'num__is_weekend': 'Weekend timing',
-                'bool__requires_road_closure': 'Requires road closure',
-                'cat__priority_High': 'High priority event',
-                'cat__priority_Low': 'Low priority event',
-                'cat__priority_Medium': 'Medium priority event',
+                'num__location_cluster': 'Location hotspot cluster',
+                'num__priority_encoded': 'Priority status',
+                'num__requires_road_closure': 'Requires road closure',
                 'cat__event_type_planned': 'Planned/Public event',
                 'cat__event_type_unplanned': 'Unplanned event',
             }
