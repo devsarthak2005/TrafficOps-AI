@@ -4,7 +4,9 @@ import { useState } from "react";
 import { useSimulationStore } from "@/store/useSimulationStore";
 import { useMapStore } from "@/store/useMapStore";
 import { useMLStore } from "@/store/useMLStore";
+import { useOperationsStore } from "@/store/useOperationsStore";
 import { MLPredictionPanel } from "./MLPredictionPanel";
+import { DeploymentPlanCard } from "../dashboard/DeploymentPlanCard";
 import { Play, Sparkles, AlertTriangle, ArrowRight, ShieldCheck, CheckSquare, Calendar } from "lucide-react";
 
 const EVENT_OPTIONS = [
@@ -25,6 +27,7 @@ export function EventSimulatorView() {
   const isSimulating = useSimulationStore((state) => state.isSimulating);
   const predictImpact = useMLStore((state) => state.predictImpact);
   const prediction = useMLStore((state) => state.prediction);
+  const optimizeAllocation = useOperationsStore((state) => state.optimizeAllocation);
 
   const [eventType, setEventType] = useState<string>("festival");
   const [targetType, setTargetType] = useState<"zone" | "junction">("zone");
@@ -36,6 +39,13 @@ export function EventSimulatorView() {
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
     return d.toISOString().slice(0, 16);
   });
+  
+  // Optimizer input states
+  const [eventAttendance, setEventAttendance] = useState<number>(1000);
+  const [eventDuration, setEventDuration] = useState<number>(3.0);
+  const [nearbyHospitals, setNearbyHospitals] = useState<number>(2);
+  const [junctionCriticality, setJunctionCriticality] = useState<number>(70);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleTargetTypeChange = (newType: "junction" | "zone") => {
@@ -83,7 +93,7 @@ export function EventSimulatorView() {
       };
 
       // 3. Trigger simulation and ML prediction
-      await Promise.all([
+      const [_, predRes] = await Promise.all([
         startSimulation({
           event_type: eventType as any,
           target_type: targetType,
@@ -92,6 +102,36 @@ export function EventSimulatorView() {
         }),
         predictImpact(mlPayload),
       ]);
+
+      // Determine zone
+      let resolvedZone = "Central";
+      if (targetType === "zone") {
+        resolvedZone = targetId;
+      } else {
+        const zoneMap: Record<string, string> = {
+          "hebbal-flyover": "North",
+          "kr-puram": "East",
+          "tin-factory": "East",
+          "old-madras-road": "East",
+          "mg-road": "Central",
+          "silk-board": "South",
+          "bellandur": "South",
+          "marathahalli-bridge": "South",
+        };
+        resolvedZone = zoneMap[targetId] || "Central";
+      }
+
+      // 4. Trigger Resource Allocation Optimization automatically!
+      await optimizeAllocation({
+        impact_level: predRes.predicted_impact,
+        confidence: predRes.confidence,
+        event_type: mlPayload.event_type,
+        event_duration: Number(eventDuration),
+        event_attendance: Number(eventAttendance),
+        nearby_hospitals: Number(nearbyHospitals),
+        junction_criticality: Number(junctionCriticality),
+        zone: resolvedZone,
+      });
     } catch (err) {
       console.error(err);
     } finally {
@@ -209,6 +249,61 @@ export function EventSimulatorView() {
               </label>
             </div>
 
+            {/* Optimization Parameters Override Panel */}
+            <div className="border-t border-white/10 pt-3 mt-1">
+              <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                Operational Optimizer Inputs
+              </h4>
+              <div className="grid grid-cols-2 gap-3">
+                {/* Attendance */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-slate-400">Crowd Size (Attendance)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={eventAttendance}
+                    onChange={(e) => setEventAttendance(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full rounded border border-white/10 bg-white/5 px-2.5 py-1.5 text-slate-200 text-xs outline-none focus:border-blue-500/50"
+                  />
+                </div>
+                {/* Duration */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-slate-400">Duration (Hours)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    value={eventDuration}
+                    onChange={(e) => setEventDuration(Math.max(0, parseFloat(e.target.value) || 0))}
+                    className="w-full rounded border border-white/10 bg-white/5 px-2.5 py-1.5 text-slate-200 text-xs outline-none focus:border-blue-500/50"
+                  />
+                </div>
+                {/* Nearby Hospitals */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-slate-400">Nearby Hospitals</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={nearbyHospitals}
+                    onChange={(e) => setNearbyHospitals(Math.max(0, parseInt(e.target.value) || 0))}
+                    className="w-full rounded border border-white/10 bg-white/5 px-2.5 py-1.5 text-slate-200 text-xs outline-none focus:border-blue-500/50"
+                  />
+                </div>
+                {/* Junction Criticality */}
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] text-slate-400">Criticality (0-100)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={junctionCriticality}
+                    onChange={(e) => setJunctionCriticality(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                    className="w-full rounded border border-white/10 bg-white/5 px-2.5 py-1.5 text-slate-200 text-xs outline-none focus:border-blue-500/50"
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* Start DateTime */}
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-semibold text-slate-400">Simulation Start Time</label>
@@ -302,8 +397,9 @@ export function EventSimulatorView() {
         </div>
 
         {/* Right Prediction Panel */}
-        <div className="col-span-7 flex flex-col">
+        <div className="col-span-7 flex flex-col gap-6 overflow-y-auto pr-1">
           <MLPredictionPanel />
+          <DeploymentPlanCard />
         </div>
       </div>
     </div>

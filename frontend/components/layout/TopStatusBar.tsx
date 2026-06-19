@@ -35,9 +35,13 @@ const NAV_ITEMS = [
 export function TopStatusBar() {
   const activeTab = useMapStore((state) => state.activeTab);
   const setActiveTab = useMapStore((state) => state.setActiveTab);
-  const [timeLabel, setTimeLabel] = useState(() => formatClock(new Date()));
+  const [timeLabel, setTimeLabel] = useState("");
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+    setTimeLabel(formatClock(new Date()));
+
     const interval = window.setInterval(() => {
       setTimeLabel(formatClock(new Date()));
     }, 1000);
@@ -84,7 +88,7 @@ export function TopStatusBar() {
       <div className="flex items-center gap-2 rounded-md border border-white/5 bg-white/5 px-3 py-1.5 text-slate-300">
         <Clock className="h-3.5 w-3.5 text-blue-400" />
         <span className="font-mono text-xs font-medium tracking-[0.15em]">
-          {timeLabel}
+          {mounted ? timeLabel : "--:--:--"}
         </span>
       </div>
     </header>

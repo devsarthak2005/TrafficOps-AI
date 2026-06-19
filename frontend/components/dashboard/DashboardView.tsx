@@ -7,6 +7,7 @@ import { useAlertStore } from "@/store/useAlertStore";
 import { useSimulationStore } from "@/store/useSimulationStore";
 import { useMLStore } from "@/store/useMLStore";
 import { useCorridorStore } from "@/store/useCorridorStore";
+import { DeploymentPlanCard } from "./DeploymentPlanCard";
 import { 
   ShieldAlert, 
   Activity, 
@@ -254,6 +255,8 @@ export function DashboardView() {
               </button>
             </div>
           </div>
+
+          <DeploymentPlanCard />
 
           {/* Recent Alerts List */}
           <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col gap-3 shadow-lg flex-1 min-h-[200px]">
