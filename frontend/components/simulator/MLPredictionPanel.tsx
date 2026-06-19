@@ -70,35 +70,6 @@ export function MLPredictionPanel() {
         </div>
       </div>
 
-      {/* Local Contributions (Shapley Reasons) */}
-      <div className="flex-1 flex flex-col gap-3 py-2 justify-center">
-        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Explainability Factors (Logit Contributions)</h4>
-        <div className="flex flex-col gap-2.5">
-          {reasons.map((r, i) => {
-            const match = r.match(/^(.*?) contributed \+(\d+)%$/);
-            if (!match) return null;
-            const [, label, pct] = match;
-            return (
-              <div key={i} className="flex flex-col gap-1">
-                <div className="flex justify-between text-xs text-slate-300">
-                  <span>{label}</span>
-                  <span className="font-semibold text-blue-400">+{pct}%</span>
-                </div>
-                <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-500/50 rounded-full" style={{ width: `${pct}%` }} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Terminal Explanation Panel */}
-      <div className="rounded-md border border-white/5 bg-black/40 p-3.5 font-mono text-[11px] text-slate-300 leading-relaxed max-h-[140px] overflow-y-auto">
-        <span className="text-slate-500 font-bold block mb-1"># model_explanation_stream</span>
-        <pre className="whitespace-pre-wrap">{explanation}</pre>
-      </div>
-
       {/* Recommendations */}
       <div className="border-t border-white/10 pt-3 flex flex-col gap-2">
         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">

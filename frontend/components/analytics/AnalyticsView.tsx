@@ -138,20 +138,51 @@ export function AnalyticsView() {
             </div>
           </div>
 
-          {/* Congestion Leaderboard Card */}
-          <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col gap-2.5 shadow-lg">
-            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Top 5 Bottlenecks (Lowest Health scores)</h3>
-            <div className="flex flex-col gap-2">
-              {congestionLeaderboard.map((junc, i) => (
-                <div key={i} className="flex justify-between items-center text-xs p-2.5 rounded-lg bg-white/5 border border-white/5">
-                  <span className="text-slate-300 font-bold">{junc.name}</span>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                    junc.health < 40 ? "bg-red-500/10 text-red-400" : "bg-orange-500/10 text-orange-400"
-                  }`}>
-                    Health Index: {junc.health}%
-                  </span>
-                </div>
-              ))}
+          {/* Bottom Diagnostics Grid (Bottlenecks + Resource Utilization) */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Congestion Leaderboard Card */}
+            <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col gap-2.5 shadow-lg">
+              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Top 5 Bottlenecks (Lowest Health)</h3>
+              <div className="flex flex-col gap-2">
+                {congestionLeaderboard.map((junc, i) => (
+                  <div key={i} className="flex justify-between items-center text-xs p-2.5 rounded-lg bg-white/5 border border-white/5">
+                    <span className="text-slate-300 font-bold truncate max-w-[120px]">{junc.name}</span>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                      junc.health < 40 ? "bg-red-500/10 text-red-400" : "bg-orange-500/10 text-orange-400"
+                    }`}>
+                      Health: {junc.health}%
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Resource Utilization Card */}
+            <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col gap-3 shadow-lg">
+              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <BarChart3 className="h-4 w-4 text-blue-400" /> Resource Deployed Index
+              </h3>
+              
+              <div className="flex flex-col gap-2.5 mt-1">
+                {[
+                  { label: "Officers Deployed", pct: 78, desc: "546 / 700 active" },
+                  { label: "Patrol Cars Active", pct: 65, desc: "52 / 80 on route" },
+                  { label: "Barricades Dispatched", pct: 40, desc: "200 / 500 placed" },
+                ].map((item, idx) => (
+                  <div key={idx} className="flex flex-col gap-1 text-xs">
+                    <div className="flex justify-between text-slate-300">
+                      <span className="text-slate-400">{item.label}</span>
+                      <span className="text-[10px] text-slate-500">{item.desc}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                        <div className="h-full bg-blue-500/50 rounded-full" style={{ width: `${item.pct}%` }} />
+                      </div>
+                      <span className="font-semibold text-slate-200 min-w-[28px] text-right">{item.pct}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>

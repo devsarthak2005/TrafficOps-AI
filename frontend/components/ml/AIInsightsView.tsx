@@ -2,18 +2,91 @@
 
 import { useEffect } from "react";
 import { useMLStore } from "@/store/useMLStore";
-import { BrainCircuit, Cpu, Compass, Database, Activity, ShieldCheck, History } from "lucide-react";
+import { BrainCircuit, Cpu, Compass, Database, Activity, History } from "lucide-react";
 
 export function AIInsightsView() {
-  const { importances, predictionHistory, fetchImportances } = useMLStore();
+  const { prediction, importances, predictionHistory, fetchImportances } = useMLStore();
 
   useEffect(() => {
     fetchImportances();
   }, [fetchImportances]);
 
+  // Helper to render active forecast Shapley breakdown
+  const renderActiveExplainability = () => {
+    if (!prediction) {
+      return (
+        <div className="rounded-xl border border-dashed border-white/10 bg-panel/50 p-6 text-center flex flex-col items-center justify-center min-h-[200px] flex-1">
+          <Activity className="h-8 w-8 text-slate-600 mb-2" />
+          <h4 className="font-semibold text-slate-300 text-xs mb-1 uppercase tracking-wider">Active Explainability Standby</h4>
+          <p className="text-[10px] text-slate-500 max-w-[240px] mx-auto leading-relaxed">
+            Run an event scenario in the Event Simulator to view real-time logit explanations and local Shapley breakdowns here.
+          </p>
+        </div>
+      );
+    }
+
+    const { predicted_impact, confidence, reasons, explanation } = prediction;
+    
+    // Color coding thresholds
+    const colorConfig = {
+      Low: { text: "text-emerald-400", bg: "bg-emerald-500/10", border: "border-emerald-500/20", ring: "stroke-emerald-500" },
+      Medium: { text: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20", ring: "stroke-amber-500" },
+      High: { text: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/20", ring: "stroke-orange-500" },
+      Critical: { text: "text-red-400 bg-red-500/10 border-red-500/20", bg: "bg-red-500/10", border: "border-red-500/20 animate-pulse", ring: "stroke-red-500" },
+    }[predicted_impact];
+
+    return (
+      <div className="rounded-xl border border-white/5 bg-panel p-5 flex flex-col gap-4 shadow-lg">
+        {/* Header */}
+        <div className="flex justify-between items-center border-b border-white/10 pb-3">
+          <div>
+            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-slate-500">Active Forecast Explainability</span>
+            <h3 className="text-xs font-bold text-slate-200 mt-1 flex items-center gap-1.5">
+              Impact: <span className={colorConfig.text}>{predicted_impact}</span>
+            </h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-slate-400 font-medium">Confidence:</span>
+            <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-blue-500/10 border border-blue-500/20 text-blue-400">
+              {Math.round(confidence)}%
+            </span>
+          </div>
+        </div>
+
+        {/* Local Contributions (Shapley Reasons) */}
+        <div className="flex flex-col gap-3 py-1">
+          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Explainability Factors (Logit Contributions)</h4>
+          <div className="flex flex-col gap-2.5">
+            {reasons.map((r, i) => {
+              const match = r.match(/^(.*?) contributed \+(\d+)%$/);
+              if (!match) return null;
+              const [, label, pct] = match;
+              return (
+                <div key={i} className="flex flex-col gap-1">
+                  <div className="flex justify-between text-xs text-slate-300">
+                    <span className="text-xs">{label}</span>
+                    <span className="font-semibold text-blue-400">+{pct}%</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-500/50 rounded-full" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Terminal Explanation Panel */}
+        <div className="rounded-md border border-white/5 bg-black/40 p-3 font-mono text-[10px] text-slate-300 leading-relaxed max-h-[140px] overflow-y-auto">
+          <span className="text-slate-500 font-bold block mb-1"># model_explanation_stream</span>
+          <pre className="whitespace-pre-wrap">{explanation}</pre>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col gap-6 p-6 h-full overflow-y-auto bg-[#080808]">
-      
       {/* Title */}
       <div>
         <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
@@ -25,8 +98,8 @@ export function AIInsightsView() {
       </div>
 
       <div className="grid grid-cols-12 gap-6 min-h-0 flex-1 animate-fadeIn">
-        {/* Left Column: Diagnostics and Importances (7 cols) */}
-        <div className="col-span-7 flex flex-col gap-6 overflow-y-auto pr-1">
+        {/* Left Column: Diagnostics and Importances (6 cols) */}
+        <div className="col-span-6 flex flex-col gap-6">
           
           {/* Model Metrics Card */}
           <div className="rounded-xl border border-white/5 bg-panel p-5 flex flex-col gap-4 shadow-lg">
@@ -65,7 +138,7 @@ export function AIInsightsView() {
           </div>
 
           {/* Global Feature Importance Chart */}
-          <div className="rounded-xl border border-white/5 bg-panel p-5 flex flex-col gap-4 shadow-lg">
+          <div className="rounded-xl border border-white/5 bg-panel p-5 flex flex-col gap-4 shadow-lg flex-1 min-h-[300px]">
             <div className="flex justify-between items-center border-b border-white/10 pb-2">
               <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
                 <Activity className="h-4 w-4 text-blue-400" /> Global Feature Importance (Top Features)
@@ -76,7 +149,7 @@ export function AIInsightsView() {
             {importances.length === 0 ? (
               <div className="text-center p-6 text-slate-500 text-xs">Loading importance matrix...</div>
             ) : (
-              <div className="flex flex-col gap-3 max-h-[300px] overflow-y-auto pr-1">
+              <div className="flex flex-col gap-3 overflow-y-auto pr-1">
                 {importances.map((item, idx) => (
                   <div key={idx} className="flex flex-col gap-1 text-xs">
                     <div className="flex justify-between text-slate-300">
@@ -93,53 +166,59 @@ export function AIInsightsView() {
           </div>
         </div>
 
-        {/* Right Column: Prediction History Logs (5 cols) */}
-        <div className="col-span-5 flex flex-col gap-2 rounded-xl border border-white/5 bg-panel p-4 shadow-lg overflow-y-auto">
-          <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider border-b border-white/10 pb-2 flex items-center gap-2">
-            <History className="h-4 w-4 text-blue-400" /> Prediction Run History (Current Session)
-          </h3>
+        {/* Right Column: Active forecast & Prediction History Logs (6 cols) */}
+        <div className="col-span-6 flex flex-col gap-6">
+          {/* Active forecast Explainability */}
+          {renderActiveExplainability()}
 
-          {predictionHistory.length === 0 ? (
-            <div className="flex flex-col items-center justify-center p-8 text-center text-slate-500 text-xs flex-1">
-              No predictions generated in this browser session.
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {predictionHistory.map((pred, idx) => (
-                <div key={idx} className="p-3 rounded-lg bg-white/5 border border-white/5 flex flex-col gap-2 text-xs">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-blue-400">{pred.cause || "EVENT"}</span>
-                    <span className="text-[10px] text-slate-500">{pred.timestamp}</span>
-                  </div>
+          {/* Prediction History Logs */}
+          <div className="rounded-xl border border-white/5 bg-panel p-4 shadow-lg overflow-y-auto flex-1 min-h-[220px]">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider border-b border-white/10 pb-2 flex items-center gap-2">
+              <History className="h-4 w-4 text-blue-400" /> Prediction Run History (Current Session)
+            </h3>
 
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-400">Predicted Impact:</span>
-                    <span className={`font-bold ${
-                      {
-                        Low: "text-emerald-400",
-                        Medium: "text-amber-400",
-                        High: "text-orange-400",
-                        Critical: "text-red-400 animate-pulse"
-                      }[pred.predicted_impact]
-                    }`}>{pred.predicted_impact}</span>
-                  </div>
+            {predictionHistory.length === 0 ? (
+              <div className="flex flex-col items-center justify-center p-8 text-center text-slate-500 text-xs h-full">
+                No predictions generated in this browser session.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {predictionHistory.map((pred, idx) => (
+                  <div key={idx} className="p-3 rounded-lg bg-white/5 border border-white/5 flex flex-col gap-2 text-xs">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-blue-400">{pred.cause || "EVENT"}</span>
+                      <span className="text-[10px] text-slate-500">{pred.timestamp}</span>
+                    </div>
 
-                  <div className="flex justify-between text-[11px]">
-                    <span className="text-slate-400">Confidence Score:</span>
-                    <span className="font-semibold text-slate-200">{Math.round(pred.confidence)}%</span>
-                  </div>
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-400">Predicted Impact:</span>
+                      <span className={`font-bold ${
+                        {
+                          Low: "text-emerald-400",
+                          Medium: "text-amber-400",
+                          High: "text-orange-400",
+                          Critical: "text-red-400 animate-pulse"
+                        }[pred.predicted_impact]
+                      }`}>{pred.predicted_impact}</span>
+                    </div>
 
-                  <div className="border-t border-white/5 pt-1.5 flex flex-wrap gap-1.5">
-                    {pred.reasons.slice(0, 3).map((r, i) => (
-                      <span key={i} className="px-1.5 py-0.5 rounded bg-white/5 border border-white/5 text-[9px] text-slate-400">
-                        {r.split(" contributed")[0]}
-                      </span>
-                    ))}
+                    <div className="flex justify-between text-[11px]">
+                      <span className="text-slate-400">Confidence Score:</span>
+                      <span className="font-semibold text-slate-200">{Math.round(pred.confidence)}%</span>
+                    </div>
+
+                    <div className="border-t border-white/5 pt-1.5 flex flex-wrap gap-1.5">
+                      {pred.reasons.slice(0, 3).map((r, i) => (
+                        <span key={i} className="px-1.5 py-0.5 rounded bg-white/5 border border-white/5 text-[9px] text-slate-400">
+                          {r.split(" contributed")[0]}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useMapStore } from "@/store/useMapStore";
 import { useSimulationStore } from "@/store/useSimulationStore";
@@ -12,6 +12,8 @@ import { AnalyticsView } from "@/components/analytics/AnalyticsView";
 import { AIInsightsView } from "@/components/ml/AIInsightsView";
 import { AlertsCenterView } from "@/components/alerts/AlertsCenterView";
 import CorridorPlannerPanel from "@/components/corridor/CorridorPlannerPanel";
+import { DeploymentPlanCard } from "@/components/dashboard/DeploymentPlanCard";
+import { DiversionPlannerCard } from "@/components/simulator/DiversionPlannerCard";
 import ResourceRecommendationPanel from "@/components/resources/ResourceRecommendationPanel";
 import SimilarIncidentsPanel from "@/components/incidents/SimilarIncidentsPanel";
 import { Layers, Eye, EyeOff, Navigation, ShieldCheck } from "lucide-react";
@@ -31,6 +33,7 @@ const MapView = dynamic(
 
 export function CommandCenterShell() {
   const activeTab = useMapStore((state) => state.activeTab);
+  const [corridorSubTab, setCorridorSubTab] = useState<"corridor" | "deployment" | "diversion">("corridor");
   const mapInstance = useMapStore((state) => state.mapInstance);
   const fetchActiveSimulations = useSimulationStore((state) => state.fetchActiveSimulations);
 
@@ -134,8 +137,35 @@ export function CommandCenterShell() {
 
         {/* Emergency Corridors Overlay Panel */}
         {activeTab === "corridors" && (
-          <div className="absolute top-6 left-6 z-10 bg-panel/95 border border-white/10 p-5 rounded-xl backdrop-blur-md shadow-2xl w-[320px] max-h-[calc(100vh-120px)] overflow-y-auto animate-fadeIn">
-            <CorridorPlannerPanel />
+          <div className="absolute top-6 left-6 z-10 bg-panel/95 border border-white/10 p-5 rounded-xl backdrop-blur-md shadow-2xl w-[360px] max-h-[calc(100vh-120px)] overflow-y-auto animate-fadeIn flex flex-col gap-4">
+            {/* Sticky Sub-Tab Navigation Header */}
+            <div className="flex rounded-lg bg-slate-950 p-1 border border-slate-900 w-full shrink-0 sticky top-0 z-10">
+              {[
+                { id: "corridor" as const, label: "Corridor" },
+                { id: "deployment" as const, label: "Deployment" },
+                { id: "diversion" as const, label: "Diversion" },
+              ].map((sub) => (
+                <button
+                  key={sub.id}
+                  type="button"
+                  onClick={() => setCorridorSubTab(sub.id)}
+                  className={`flex-1 rounded-md py-1.5 text-center text-[10px] font-extrabold uppercase tracking-wider transition-all duration-200 ${
+                    corridorSubTab === sub.id
+                      ? "bg-slate-800 text-white shadow-md border border-slate-700/30"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  {sub.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Sub-Tab Content Area */}
+            <div className="flex-1 min-h-0">
+              {corridorSubTab === "corridor" && <CorridorPlannerPanel />}
+              {corridorSubTab === "deployment" && <DeploymentPlanCard />}
+              {corridorSubTab === "diversion" && <DiversionPlannerCard />}
+            </div>
           </div>
         )}
 

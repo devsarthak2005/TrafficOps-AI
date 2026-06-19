@@ -99,7 +99,7 @@ export function DeploymentPlanCard() {
   }).format(estimated_operational_cost);
 
   return (
-    <div className="rounded-xl border border-white/10 bg-panel/95 p-4 flex flex-col gap-4 shadow-2xl backdrop-blur-md relative overflow-hidden transition-all duration-300">
+    <div className="rounded-xl border border-white/10 bg-panel/95 p-4 flex flex-col gap-4 shadow-2xl backdrop-blur-md relative min-h-fit transition-all duration-300">
       
       {/* Header */}
       <div className="flex justify-between items-center border-b border-white/5 pb-2.5">
