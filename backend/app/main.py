@@ -21,6 +21,7 @@ from .routers.hospitals import router as hospitals_router
 from .routers.similar_incidents import router as similar_incidents_router
 from .routers.ml import router as ml_router
 from .routers.operations import router as operations_router
+from .routers.diversions import router as diversions_router
 
 logger = logging.getLogger(__name__)
 
@@ -84,4 +85,5 @@ app.include_router(hospitals_router)
 app.include_router(similar_incidents_router)
 app.include_router(ml_router)
 app.include_router(operations_router)
+app.include_router(diversions_router)
 

@@ -9,6 +9,7 @@ import { getJunctions } from "@/lib/api/junctions";
 import { HeatmapLayer } from "@/components/map/HeatmapLayer";
 import { useSimulationStore } from "@/store/useSimulationStore";
 import CorridorRouteLayer from "@/components/corridor/CorridorRouteLayer";
+import DiversionRouteLayer from "@/components/map/DiversionRouteLayer";
 import { getHospitalsStatus } from "@/lib/api/hospitals";
 import type { HospitalStatus } from "@/types/hospital";
 import { HospitalMarker } from "@/components/hospitals/HospitalMarker";
@@ -73,6 +74,8 @@ export function MapView() {
         {showHeatmap && <HeatmapLayer />}
 
         {showCorridors && <CorridorRouteLayer />}
+
+        <DiversionRouteLayer />
 
         {showJunctions && junctions.map((junction) => (
           <JunctionMarker key={junction.id} junction={junction} />

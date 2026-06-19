@@ -5,8 +5,10 @@ import { useSimulationStore } from "@/store/useSimulationStore";
 import { useMapStore } from "@/store/useMapStore";
 import { useMLStore } from "@/store/useMLStore";
 import { useOperationsStore } from "@/store/useOperationsStore";
+import { useDiversionStore } from "@/store/useDiversionStore";
 import { MLPredictionPanel } from "./MLPredictionPanel";
 import { DeploymentPlanCard } from "../dashboard/DeploymentPlanCard";
+import { DiversionPlannerCard } from "./DiversionPlannerCard";
 import { Play, Sparkles, AlertTriangle, ArrowRight, ShieldCheck, CheckSquare, Calendar } from "lucide-react";
 
 const EVENT_OPTIONS = [
@@ -28,6 +30,8 @@ export function EventSimulatorView() {
   const predictImpact = useMLStore((state) => state.predictImpact);
   const prediction = useMLStore((state) => state.prediction);
   const optimizeAllocation = useOperationsStore((state) => state.optimizeAllocation);
+  const generateDiversions = useDiversionStore((state) => state.generateDiversions);
+  const clearDiversions = useDiversionStore((state) => state.clearDiversions);
 
   const [eventType, setEventType] = useState<string>("festival");
   const [targetType, setTargetType] = useState<"zone" | "junction">("zone");
@@ -60,6 +64,7 @@ export function EventSimulatorView() {
   const handleRun = async () => {
     if (!targetId) return;
     setIsSubmitting(true);
+    clearDiversions();
     try {
       // 1. Resolve coordinates
       let lat = 12.9716;
@@ -122,7 +127,7 @@ export function EventSimulatorView() {
       }
 
       // 4. Trigger Resource Allocation Optimization automatically!
-      await optimizeAllocation({
+      const optPlan = await optimizeAllocation({
         impact_level: predRes.predicted_impact,
         confidence: predRes.confidence,
         event_type: mlPayload.event_type,
@@ -131,6 +136,26 @@ export function EventSimulatorView() {
         nearby_hospitals: Number(nearbyHospitals),
         junction_criticality: Number(junctionCriticality),
         zone: resolvedZone,
+      });
+
+      // 5. Trigger Diversion Route Planner automatically!
+      const zoneToJuncMap: Record<string, string> = {
+        North: "hebbal-flyover",
+        East: "kr-puram",
+        Central: "mg-road",
+        South: "silk-board"
+      };
+      
+      const diversionLocation = targetType === "junction"
+        ? targetId
+        : (zoneToJuncMap[targetId] || "silk-board");
+
+      await generateDiversions({
+        event_location: diversionLocation,
+        predicted_impact_level: predRes.predicted_impact,
+        deployment_score: optPlan.deployment_score,
+        event_severity: intensity.charAt(0).toUpperCase() + intensity.slice(1),
+        event_attendance: Number(eventAttendance),
       });
     } catch (err) {
       console.error(err);
@@ -400,6 +425,7 @@ export function EventSimulatorView() {
         <div className="col-span-7 flex flex-col gap-6 overflow-y-auto pr-1">
           <MLPredictionPanel />
           <DeploymentPlanCard />
+          <DiversionPlannerCard />
         </div>
       </div>
     </div>
