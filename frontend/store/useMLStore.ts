@@ -10,6 +10,17 @@ export interface MLPrediction {
   cause?: string;
 }
 
+export interface CopilotBriefing {
+  summary: string;
+  risks: string[];
+  actions: string[];
+  confidence: number;
+  generated_by: "gemini" | "fallback";
+  timestamp: string;
+  commissioner_briefing?: string;
+  citizen_advisory?: string;
+}
+
 export interface FeatureImportance {
   feature: string;
   importance: number;
@@ -17,9 +28,11 @@ export interface FeatureImportance {
 
 interface MLState {
   prediction: MLPrediction | null;
+  briefing: CopilotBriefing | null;
   importances: FeatureImportance[];
   predictionHistory: MLPrediction[];
   isPredicting: boolean;
+  isGeneratingBriefing: boolean;
   predictImpact: (payload: {
     event_cause: string;
     event_type: "planned" | "unplanned";
@@ -30,14 +43,44 @@ interface MLState {
     start_datetime: string;
   }) => Promise<MLPrediction>;
   fetchImportances: () => Promise<void>;
+  generateBriefing: (payload: {
+    prediction: { impact_level: string; confidence: number };
+    feature_contributions: { feature: string; contribution: number }[];
+    resource_plan: {
+      deployment_score: number;
+      officers_required: number;
+      patrol_vehicles: number;
+      barricades: number;
+      diversion_level: string;
+      emergency_corridor_required: boolean;
+      estimated_response_time: string;
+      estimated_operational_cost: number;
+    };
+    diversion_plan?: {
+      routes: any[];
+      estimated_vehicles_diverted: number;
+      estimated_delay_reduction: string;
+    };
+    event_metadata: {
+      event_type: string;
+      event_cause: string;
+      zone: string;
+      junction: string;
+      attendance: number;
+      duration: number;
+      start_time: string;
+    };
+  }) => Promise<CopilotBriefing>;
   resetPrediction: () => void;
 }
 
 export const useMLStore = create<MLState>((set, get) => ({
   prediction: null,
+  briefing: null,
   importances: [],
   predictionHistory: [],
   isPredicting: false,
+  isGeneratingBriefing: false,
 
   predictImpact: async (payload) => {
     set({ isPredicting: true });
@@ -90,5 +133,29 @@ export const useMLStore = create<MLState>((set, get) => ({
     }
   },
 
-  resetPrediction: () => set({ prediction: null }),
+  generateBriefing: async (payload) => {
+    set({ isGeneratingBriefing: true });
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+      const response = await fetch(`${baseUrl}/api/copilot/briefing`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate executive briefing");
+      }
+
+      const data: CopilotBriefing = await response.json();
+      set({ briefing: data, isGeneratingBriefing: false });
+      return data;
+    } catch (err) {
+      console.error("Failed to generate briefing:", err);
+      set({ isGeneratingBriefing: false });
+      throw err;
+    }
+  },
+
+  resetPrediction: () => set({ prediction: null, briefing: null }),
 }));

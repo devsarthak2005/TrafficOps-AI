@@ -48,3 +48,39 @@ def generate_explanation(prompt: str, fallback: str) -> str:
         logger.error(f"Gemini API call failed or timed out: {e}. Using fallback.")
     
     return fallback
+
+
+def generate_copilot_briefing(prompt: str) -> str | None:
+    """Query Gemini 2.0 Flash to generate a structured JSON briefing."""
+    if not GEMINI_API_KEY:
+        return None
+
+    try:
+        model = genai.GenerativeModel("gemini-2.0-flash")
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                max_output_tokens=600,
+                temperature=0.2,
+                response_mime_type="application/json"
+            ),
+            request_options={"timeout": 10.0}
+        )
+        return response.text.strip()
+    except Exception as e:
+        logger.error(f"Gemini briefing generation failed: {e}")
+        # Try without response_mime_type in case old package version
+        try:
+            response = model.generate_content(
+                prompt,
+                generation_config=genai.types.GenerationConfig(
+                    max_output_tokens=600,
+                    temperature=0.2
+                ),
+                request_options={"timeout": 10.0}
+            )
+            return response.text.strip()
+        except Exception as ex:
+            logger.error(f"Fallback Gemini briefing generation failed: {ex}")
+            return None
+

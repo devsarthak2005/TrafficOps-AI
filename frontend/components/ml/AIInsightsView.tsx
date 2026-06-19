@@ -2,14 +2,89 @@
 
 import { useEffect } from "react";
 import { useMLStore } from "@/store/useMLStore";
+import { useOperationsStore } from "@/store/useOperationsStore";
+import { useDiversionStore } from "@/store/useDiversionStore";
+import { useSimulationStore } from "@/store/useSimulationStore";
+import { TrafficCommanderCard } from "./TrafficCommanderCard";
 import { BrainCircuit, Cpu, Compass, Database, Activity, History } from "lucide-react";
 
 export function AIInsightsView() {
-  const { prediction, importances, predictionHistory, fetchImportances } = useMLStore();
+  const { 
+    prediction, 
+    importances, 
+    predictionHistory, 
+    fetchImportances,
+    briefing,
+    isGeneratingBriefing,
+    generateBriefing
+  } = useMLStore();
 
+  const operationsPlan = useOperationsStore((state) => state.plan);
+  const operationsInputs = useOperationsStore((state) => state.inputs);
+  const diversionPlan = useDiversionStore((state) => state.plan);
+  const activeSimulations = useSimulationStore((state) => state.activeSimulations);
+
+  // Trigger briefing automatically when prediction is generated but briefing is empty
   useEffect(() => {
     fetchImportances();
   }, [fetchImportances]);
+
+  const handleRegenerateBriefing = () => {
+    if (!prediction) return;
+
+    const activeSim = activeSimulations[0];
+    const eventCause = prediction.cause ? prediction.cause.toLowerCase().replace(" ", "_") : "others";
+    const eventType = activeSim ? activeSim.event_type : "planned";
+    const zone = operationsInputs.zone || "Central";
+    const junction = activeSim ? activeSim.target_id : "silk-board";
+
+    const payload = {
+      prediction: {
+        impact_level: prediction.predicted_impact,
+        confidence: prediction.confidence
+      },
+      feature_contributions: prediction.reasons.map((r) => {
+        const match = r.match(/^(.*?) contributed \+(\d+)%$/);
+        return {
+          feature: match ? match[1].trim() : r,
+          contribution: match ? parseFloat(match[2]) : 10.0
+        };
+      }),
+      resource_plan: {
+        deployment_score: operationsPlan?.deployment_score || 50.0,
+        officers_required: operationsPlan?.officers_required || 0,
+        patrol_vehicles: operationsPlan?.patrol_vehicles || 0,
+        barricades: operationsPlan?.barricades || 0,
+        diversion_level: operationsPlan?.diversion_level || "None",
+        emergency_corridor_required: operationsPlan?.emergency_corridor_required || false,
+        estimated_response_time: operationsPlan?.estimated_response_time || "N/A",
+        estimated_operational_cost: operationsPlan?.estimated_operational_cost || 0.0
+      },
+      diversion_plan: diversionPlan ? {
+        routes: diversionPlan.routes || [],
+        estimated_vehicles_diverted: diversionPlan.estimated_vehicles_diverted || 0,
+        estimated_delay_reduction: diversionPlan.estimated_delay_reduction || "0%"
+      } : undefined,
+      event_metadata: {
+        event_type: eventType,
+        event_cause: eventCause,
+        zone: zone,
+        junction: junction,
+        attendance: operationsInputs.event_attendance || 1000,
+        duration: operationsInputs.event_duration || 2.0,
+        start_time: activeSim ? new Date(activeSim.started_at).toLocaleTimeString() : new Date().toLocaleTimeString()
+      }
+    };
+
+    generateBriefing(payload);
+  };
+
+  useEffect(() => {
+    if (prediction && !briefing && !isGeneratingBriefing) {
+      handleRegenerateBriefing();
+    }
+  }, [prediction, briefing, isGeneratingBriefing]);
+
 
   // Helper to render active forecast Shapley breakdown
   const renderActiveExplainability = () => {
@@ -95,6 +170,15 @@ export function AIInsightsView() {
         <p className="text-slate-400 text-xs mt-0.5">
           Validation diagnostics, XGBoost booster parameter structures, and global explainability metrics.
         </p>
+      </div>
+
+      {/* AI Traffic Commander (Executive Copilot) Section */}
+      <div className="w-full">
+        <TrafficCommanderCard 
+          briefing={briefing}
+          isGenerating={isGeneratingBriefing}
+          onRegenerate={handleRegenerateBriefing}
+        />
       </div>
 
       <div className="grid grid-cols-12 gap-6 min-h-0 flex-1 animate-fadeIn">
