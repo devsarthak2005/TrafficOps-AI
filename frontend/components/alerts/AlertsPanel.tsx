@@ -3,10 +3,11 @@
 import { useEffect } from "react";
 import { useAlertStore } from "@/store/useAlertStore";
 import AlertCard from "./AlertCard";
-import { Loader2, BellOff, ShieldAlert } from "lucide-react";
+import { Loader2, BellOff, ShieldAlert, AlertTriangle } from "lucide-react";
 
 export default function AlertsPanel() {
   const alerts = useAlertStore((state) => state.alerts);
+  const collisions = useAlertStore((state) => state.collisions);
   const loading = useAlertStore((state) => state.loading);
   const error = useAlertStore((state) => state.error);
   const fetchAlerts = useAlertStore((state) => state.fetchAlerts);
@@ -32,12 +33,40 @@ export default function AlertsPanel() {
             Predictive Alerts
           </h3>
         </div>
-        {alerts.length > 0 && (
+        {(alerts.length > 0 || collisions.length > 0) && (
           <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-[10px] font-extrabold text-red-400 border border-red-500/20">
-            {alerts.length} Active
+            {alerts.length + collisions.length} Active
           </span>
         )}
       </div>
+
+      {/* Collision Alerts Banners */}
+      {collisions.length > 0 && (
+        <div className="flex flex-col gap-2 animate-pulse shrink-0">
+          {collisions.map((col, idx) => {
+            const causesStr = col.event_causes.join(" + ");
+            return (
+              <div 
+                key={idx}
+                className="rounded-lg border border-red-500/25 bg-red-500/10 px-3.5 py-2.5 text-xs text-red-400 flex items-start gap-2.5 shadow-[0_0_15px_rgba(239,68,68,0.08)] border-l-4 border-l-red-500"
+              >
+                <AlertTriangle className="h-4 w-4 shrink-0 text-red-400 mt-0.5 animate-bounce" />
+                <div className="flex flex-col gap-0.5">
+                  <span className="font-extrabold tracking-wide text-red-300 text-[9px] uppercase">
+                    Collision Cluster Warning
+                  </span>
+                  <p className="text-[10px] text-red-400/90 leading-relaxed font-bold">
+                    ⚠ Multi-event collision detected: {causesStr} within {col.min_distance_km}km
+                  </p>
+                  <span className="text-[8px] font-mono text-red-500/80 mt-1 select-none">
+                    Impact Multiplier: x{col.combined_impact_multiplier} | Affected: {col.junctions_affected.join(", ").toUpperCase()}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Alert List */}
       <div className="flex flex-col gap-3 max-h-[350px] overflow-y-auto pr-1">
