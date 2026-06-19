@@ -22,6 +22,12 @@ class PredictorService:
         self.is_loaded_recovery = False
         self.load_error_recovery = None
         
+        self.escalation_preprocessor = None
+        self.escalation_model = None
+        self.escalation_freq_map = {}
+        self.is_loaded_escalation = False
+        self.load_error_escalation = None
+        
         self._load_models()
 
     def _load_models(self):
@@ -75,6 +81,31 @@ class PredictorService:
         except Exception as e:
             self.load_error_recovery = e
             logger.exception("Failed to load ML recovery model.")
+
+        # 3. Load Escalation Classifier
+        escalation_preprocessor_path = os.path.join(models_dir, "escalation_preprocessor.joblib")
+        escalation_model_path = os.path.join(models_dir, "escalation_model.joblib")
+        escalation_freq_map_path = os.path.join(models_dir, "escalation_freq_map.json")
+
+        logger.info(f"Loading escalation preprocessor from {escalation_preprocessor_path}")
+        logger.info(f"Loading escalation model from {escalation_model_path}")
+
+        try:
+            import joblib
+            import json
+            if os.path.exists(escalation_preprocessor_path) and os.path.exists(escalation_model_path):
+                self.escalation_preprocessor = joblib.load(escalation_preprocessor_path)
+                self.escalation_model = joblib.load(escalation_model_path)
+                if os.path.exists(escalation_freq_map_path):
+                    with open(escalation_freq_map_path, "r") as f:
+                        self.escalation_freq_map = json.load(f)
+                self.is_loaded_escalation = True
+                logger.info("Successfully loaded ML escalation model and preprocessor.")
+            else:
+                logger.error(f"Escalation model or preprocessor files not found at {models_dir}")
+        except Exception as e:
+            self.load_error_escalation = e
+            logger.exception("Failed to load ML escalation model.")
 
     def predict(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -222,10 +253,52 @@ class PredictorService:
             # Transform and predict
             X_trans = self.recovery_preprocessor.transform(input_df)
             pred = self.recovery_model.predict(X_trans)[0]
-            # Ensure predicted recovery time is non-negative
             return max(0, int(round(float(pred))))
         except Exception as e:
             logger.exception("Error during recovery time prediction.")
+            raise HTTPException(status_code=503, detail="Prediction model unavailable")
+
+    def predict_escalation(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Runs escalation risk prediction for the given event input.
+        Returns: {will_escalate: bool, probability: float, confidence: float}
+        """
+        if not self.is_loaded_escalation:
+            logger.error("Prediction failed: ML escalation predictor is not loaded.")
+            raise HTTPException(status_code=503, detail="Prediction model unavailable")
+
+        import pandas as pd
+
+        try:
+            junction = request_data.get('junction', 'Unknown')
+            start_dt = pd.to_datetime(request_data.get('start_datetime', pd.Timestamp.now()))
+            hour = start_dt.hour
+            
+            # Retrieve historical events_in_hour from map
+            freq_key = f"{junction}||{hour}"
+            events_in_hour = self.escalation_freq_map.get(freq_key, 0)
+            
+            input_df = pd.DataFrame([{
+                'event_cause': request_data.get('event_cause', 'others'),
+                'priority': request_data.get('priority', 'Low'),
+                'requires_road_closure': bool(request_data.get('requires_road_closure', False)),
+                'junction': junction,
+                'zone': request_data.get('zone', 'Unknown'),
+                'start_datetime': start_dt,
+                'events_in_hour': events_in_hour
+            }])
+            
+            X_trans = self.escalation_preprocessor.transform(input_df)
+            probs = self.escalation_model.predict_proba(X_trans)[0]
+            pred = int(self.escalation_model.predict(X_trans)[0])
+            
+            return {
+                "will_escalate": bool(pred == 1),
+                "probability": float(probs[1]),
+                "confidence": float(probs[pred])
+            }
+        except Exception as e:
+            logger.exception("Error during escalation prediction.")
             raise HTTPException(status_code=503, detail="Prediction model unavailable")
 
     def get_global_feature_importances(self) -> List[Dict[str, Any]]:

@@ -72,3 +72,21 @@ class RecoveryTimeRequest(BaseModel):
 class RecoveryTimeResponse(BaseModel):
     duration_minutes: int
     model_version: str = "1.0"
+
+
+class EscalationRequest(BaseModel):
+    event_cause: EventCause
+    event_type: EventType
+    priority: str
+    requires_road_closure: bool
+    latitude: float = Field(..., ge=12.7, le=13.2)
+    longitude: float = Field(..., ge=77.4, le=77.8)
+    zone: str
+    junction: str
+    start_datetime: str
+
+
+class EscalationResponse(BaseModel):
+    will_escalate: bool
+    probability: float
+    confidence: float

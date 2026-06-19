@@ -67,7 +67,23 @@ class LeakageFreeFeatureExtractor(BaseEstimator, TransformerMixin):
         X_out = X_out.drop(columns=['start_datetime', 'priority'])
         return X_out
 
-from sklearn.cluster import KMeans
+class EscalationFeatureExtractor(BaseEstimator, TransformerMixin):
+    def fit(self, X, y=None):
+        return self
+        
+    def transform(self, X):
+        X_out = X.copy()
+        dt = pd.to_datetime(X_out['start_datetime'], errors='coerce', utc=True)
+        
+        X_out['hour'] = dt.dt.hour.fillna(12)
+        X_out['day_of_week'] = dt.dt.dayofweek.fillna(0)
+        
+        # Binary road closure
+        X_out['requires_road_closure'] = X_out['requires_road_closure'].astype(int)
+        
+        X_out = X_out.drop(columns=['start_datetime'])
+        return X_out
+
 
 def build_feature_pipeline() -> Pipeline:
     """Builds and returns the scikit-learn feature engineering pipeline."""
@@ -94,4 +110,5 @@ def build_feature_pipeline() -> Pipeline:
     ])
     
     return pipeline
+
 

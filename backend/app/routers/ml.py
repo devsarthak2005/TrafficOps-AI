@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from ..schemas.prediction import (
     PredictionRequest,
@@ -9,6 +9,8 @@ from ..schemas.prediction import (
     FeatureImportanceResponse,
     RecoveryTimeRequest,
     RecoveryTimeResponse,
+    EscalationRequest,
+    EscalationResponse,
 )
 from ..services.predictor import predictor_service
 from ..services.recommendation_engine import get_recommendations
@@ -21,10 +23,7 @@ def predict_congestion_impact(request: PredictionRequest) -> PredictionResponse:
     """
     Predict congestion impact, extract local explanations, and generate operational recommendations.
     """
-    # Use predictor_service to predict and explain
     pred_res = predictor_service.predict(request.dict())
-    
-    # Generate operational recommendations
     recommendations = get_recommendations(pred_res["predicted_impact"])
     
     return PredictionResponse(
@@ -56,3 +55,15 @@ def predict_incident_recovery_time(request: RecoveryTimeRequest) -> RecoveryTime
         duration_minutes=duration,
         model_version="1.0"
     )
+
+
+@router.post("/ml/escalation-risk", response_model=EscalationResponse)
+def predict_incident_escalation_risk(request: EscalationRequest) -> EscalationResponse:
+    """
+    Predict whether an incident is likely to escalate based on pre-resolution inputs.
+    """
+    try:
+        res = predictor_service.predict_escalation(request.dict())
+        return EscalationResponse(**res)
+    except Exception as e:
+        raise HTTPException(status_code=503, detail="Prediction model unavailable")

@@ -53,40 +53,110 @@ def generate_alert_id(target_id: str, alert_type: str) -> str:
 
 
 def detect_escalation_alerts(junctions: list[dict], name_map: dict[str, str]) -> list[dict]:
-    """Detect junctions whose health score has dropped by > 15 points in the last hour."""
+    """Detect junctions whose health score is predicted to escalate, falling back to the drop heuristic."""
     alerts = []
     now = datetime.now(timezone.utc)
     one_hour_ago = now - timedelta(hours=1)
 
+    from .predictor import predictor_service
+    
+    use_ml = False
+    if hasattr(predictor_service, 'is_loaded_escalation') and predictor_service.is_loaded_escalation:
+        use_ml = True
+    else:
+        logger.warning("ML escalation model not available. Falling back to health-score drop heuristic.")
+
     for junction in junctions:
         j_id = junction["id"]
         j_name = name_map.get(j_id, j_id)
+        zone = JUNCTION_ZONES.get(j_id, "Unknown")
 
-        curr_health = compute_health_score(j_id, include_simulated=True, now=now)
-        past_health = compute_health_score(j_id, include_simulated=True, now=one_hour_ago)
+        if use_ml:
+            try:
+                # Query active incidents at this junction
+                with get_cursor() as cur:
+                    cur.execute(
+                        "SELECT id, incident_type, severity, timestamp, description FROM incidents WHERE junction_id = ?",
+                        (j_id,)
+                    )
+                    active_incidents = cur.fetchall()
 
-        drop = past_health["health_score"] - curr_health["health_score"]
-        if drop > 15:
-            confidence = min(100, max(50, 50 + int(drop * 2)))
-            minutes_likely = max(10, min(50, 60 - int(drop * 1.5)))
+                for inc in active_incidents:
+                    priority = "High" if inc["severity"].lower() in ("high", "critical") else "Low"
+                    requires_road_closure = "closure" in inc["description"].lower() or "closed" in inc["description"].lower()
+                    
+                    cause_map = {
+                        "breakdown": "vehicle_breakdown",
+                        "accident": "accident",
+                        "construction": "construction",
+                        "waterlogging": "waterlogging",
+                        "congestion": "congestion",
+                    }
+                    event_cause = cause_map.get(inc["incident_type"], "others")
+                    
+                    request_data = {
+                        "event_cause": event_cause,
+                        "event_type": "planned" if event_cause in ("construction", "public_event") else "unplanned",
+                        "priority": priority,
+                        "requires_road_closure": requires_road_closure,
+                        "latitude": junction.get("lat", 12.9716),
+                        "longitude": junction.get("lng", 77.5946),
+                        "junction": j_name,
+                        "zone": zone,
+                        "start_datetime": inc["timestamp"]
+                    }
+                    
+                    pred = predictor_service.predict_escalation(request_data)
+                    if pred["will_escalate"]:
+                        confidence = int(pred["confidence"] * 100)
+                        minutes_likely = 30
+                        prompt = (
+                            f"Explain to a traffic operator why there is an alert: Congestion escalation likely at {j_name} within "
+                            f"{minutes_likely} minutes based on ML risk assessment of active {event_cause} incident. Keep the response to a single short sentence."
+                        )
+                        fallback = f"Congestion escalation likely at {j_name} within {minutes_likely} minutes based on ML risk assessment of active {event_cause} incident."
+                        message = generate_explanation(prompt, fallback)
+                        
+                        alerts.append({
+                            "alert_id": generate_alert_id(j_id, "escalation"),
+                            "alert_type": "escalation",
+                            "junction_id": j_id,
+                            "junction_name": j_name,
+                            "confidence": confidence,
+                            "message": message,
+                            "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        })
+                        break  # alert generated for this junction, move to next
+            except Exception as e:
+                logger.error(f"Error running ML escalation prediction, falling back to heuristic: {e}")
+                use_ml = False
 
-            prompt = (
-                f"Explain to a traffic operator why there is an alert: Congestion escalation likely at {j_name} within "
-                f"{minutes_likely} minutes because its health score dropped rapidly by {drop} points recently. "
-                f"Keep the response to a single short sentence."
-            )
-            fallback = f"Congestion escalation likely at {j_name} within {minutes_likely} minutes due to a recent {drop}-point health score drop."
-            message = generate_explanation(prompt, fallback)
+        if not use_ml:
+            curr_health = compute_health_score(j_id, include_simulated=True, now=now)
+            past_health = compute_health_score(j_id, include_simulated=True, now=one_hour_ago)
 
-            alerts.append({
-                "alert_id": generate_alert_id(j_id, "escalation"),
-                "alert_type": "escalation",
-                "junction_id": j_id,
-                "junction_name": j_name,
-                "confidence": confidence,
-                "message": message,
-                "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            })
+            drop = past_health["health_score"] - curr_health["health_score"]
+            if drop > 15:
+                confidence = min(100, max(50, 50 + int(drop * 2)))
+                minutes_likely = max(10, min(50, 60 - int(drop * 1.5)))
+
+                prompt = (
+                    f"Explain to a traffic operator why there is an alert: Congestion escalation likely at {j_name} within "
+                    f"{minutes_likely} minutes because its health score dropped rapidly by {drop} points recently. "
+                    f"Keep the response to a single short sentence."
+                )
+                fallback = f"Congestion escalation likely at {j_name} within {minutes_likely} minutes due to a recent {drop}-point health score drop."
+                message = generate_explanation(prompt, fallback)
+
+                alerts.append({
+                    "alert_id": generate_alert_id(j_id, "escalation"),
+                    "alert_type": "escalation",
+                    "junction_id": j_id,
+                    "junction_name": j_name,
+                    "confidence": confidence,
+                    "message": message,
+                    "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                })
     return alerts
 
 

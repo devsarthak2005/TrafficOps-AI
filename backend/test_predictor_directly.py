@@ -41,6 +41,25 @@ class TestPredictorDirectly(unittest.TestCase):
         self.assertGreaterEqual(duration, 0)
         print("Recovery time prediction output:", duration, "minutes")
 
+    def test_escalation_prediction_success(self):
+        # Test valid input for escalation risk
+        request_data = {
+            "event_cause": EventCause.vehicle_breakdown.value,
+            "event_type": EventType.unplanned.value,
+            "priority": "Low",
+            "requires_road_closure": False,
+            "latitude": 12.9556,
+            "longitude": 77.5857,
+            "junction": "silk-board",
+            "zone": "South",
+            "start_datetime": "2026-06-19T17:00:00+05:30"
+        }
+        res = self.predictor.predict_escalation(request_data)
+        self.assertIn("will_escalate", res)
+        self.assertIn("probability", res)
+        self.assertIn("confidence", res)
+        print("Escalation prediction output:", res["will_escalate"], f"(Prob: {res['probability']})")
+
     def test_predictor_not_loaded_raises_http_exception(self):
         # Temporarily set is_loaded to False to simulate loading failure
         self.predictor.is_loaded = False
@@ -55,5 +74,12 @@ class TestPredictorDirectly(unittest.TestCase):
         self.assertEqual(context.exception.status_code, 503)
         self.assertEqual(context.exception.detail, "Prediction model unavailable")
 
+        self.predictor.is_loaded_escalation = False
+        with self.assertRaises(HTTPException) as context:
+            self.predictor.predict_escalation({})
+        self.assertEqual(context.exception.status_code, 503)
+        self.assertEqual(context.exception.detail, "Prediction model unavailable")
+
 if __name__ == "__main__":
     unittest.main()
+
