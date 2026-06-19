@@ -1,0 +1,11 @@
+event_id,predicted_impact,actual_impact,confidence,prediction_correct,resource_efficiency,diversion_success,resolution_time,zone,event_cause
+evt_001,Critical,Critical,91.0,1,0.85,0.42,3.8,Central,political_rally
+evt_002,Medium,Medium,72.0,1,0.9,0.25,1.5,South,construction
+evt_003,High,High,82.0,1,0.8,0.38,2.9,Central,festival
+evt_004,Low,Low,65.0,1,0.95,0.15,0.8,North,breakdown
+evt_005,High,Medium,78.0,0,0.7,0.2,2.1,East,accident
+evt_006,Critical,Critical,95.0,1,0.88,0.45,4.2,Central,political_rally
+evt_007,Medium,High,68.0,0,0.75,0.3,2.8,South,water_logging
+evt_008,Low,Low,59.0,1,0.92,0.1,0.9,West,breakdown
+evt_009,High,High,84.0,1,0.82,0.4,3.1,Central,festival
+evt_010,Medium,Medium,75.0,1,0.89,0.22,1.4,East,construction

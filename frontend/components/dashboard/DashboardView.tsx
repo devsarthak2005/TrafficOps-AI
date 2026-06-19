@@ -6,8 +6,9 @@ import { useMapStore } from "@/store/useMapStore";
 import { useAlertStore } from "@/store/useAlertStore";
 import { useSimulationStore } from "@/store/useSimulationStore";
 import { useMLStore } from "@/store/useMLStore";
+import { useOperationsStore } from "@/store/useOperationsStore";
+import { useDiversionStore } from "@/store/useDiversionStore";
 import { useCorridorStore } from "@/store/useCorridorStore";
-import { DeploymentPlanCard } from "./DeploymentPlanCard";
 import { 
   ShieldAlert, 
   Activity, 
@@ -17,8 +18,17 @@ import {
   RefreshCw, 
   TrendingDown, 
   UserCheck, 
-  Heart,
-  ChevronRight
+  Clock, 
+  Zap, 
+  Shuffle, 
+  CheckCircle, 
+  Flame, 
+  Users,
+  Compass,
+  ArrowRight,
+  Sparkles,
+  Award,
+  Layers
 } from "lucide-react";
 
 // Dynamic Map Preview for Leaflet (SSR resilient)
@@ -28,15 +38,18 @@ const MapPreview = dynamic(
 );
 
 export function DashboardView() {
-  const { junctions, healthMap, setActiveTab } = useMapStore();
-  const { alerts, fetchAlerts, dismissAlert } = useAlertStore();
+  const { healthMap, setActiveTab } = useMapStore();
+  const { alerts, fetchAlerts } = useAlertStore();
   const { isSimulating, activeSimulations, startSimulation, stopSimulation } = useSimulationStore();
-  const { prediction, predictImpact, resetPrediction } = useMLStore();
+  const { prediction, predictImpact, resetPrediction, briefing, generateBriefing, isGeneratingBriefing } = useMLStore();
+  const { optimizeAllocation, plan: operationsPlan, resetPlan } = useOperationsStore();
+  const { generateDiversions, plan: diversionPlan, clearDiversions } = useDiversionStore();
   const { clearPlan } = useCorridorStore();
 
   const [simRunning, setSimRunning] = useState(false);
+  const [currentStep, setCurrentStep] = useState<number | null>(null);
 
-  // Poll alerts
+  // Poll alerts on mount
   useEffect(() => {
     fetchAlerts();
     const interval = setInterval(() => fetchAlerts(), 5000);
@@ -45,74 +58,272 @@ export function DashboardView() {
 
   // Compute stats
   const activeIncidentsCount = useMemo(() => {
-    return alerts.filter(a => a.alert_type === "incident_spread").length + 2; // benchmark scaling
+    return alerts.filter(a => a.status === "active").length;
   }, [alerts]);
+
+  const criticalPredictionsCount = useMemo(() => {
+    return (prediction?.predicted_impact === "Critical" ? 1 : 0) + (alerts.filter(a => a.severity === "Critical").length);
+  }, [prediction, alerts]);
 
   const avgJunctionHealth = useMemo(() => {
     const values = Object.values(healthMap).map((h) => h.health_score);
-    if (values.length === 0) return 82.5; // baseline default
+    if (values.length === 0) return 84; // baseline default
     return Math.round(values.reduce((a, b) => a + b, 0) / values.length);
   }, [healthMap]);
 
-  // Quick Action Triggers
-  const triggerVIPCorridor = async () => {
+  // 1. One-click Demo Scenarios Trigger Mappings
+  const triggerDemoScenario = async (scenario: "rally" | "vip" | "construction" | "accident" | "sports") => {
     setSimRunning(true);
+    resetPrediction();
+    clearPlan();
+    clearDiversions();
+    
+    let eventCause = "others";
+    let intensity: "low" | "medium" | "high" = "medium";
+    let priority: "Low" | "Medium" | "High" = "Medium";
+    let roadClosure = false;
+    let targetId = "silk-board";
+    let lat = 12.9176;
+    let lng = 77.6246;
+
+    if (scenario === "rally") {
+      eventCause = "protest";
+      intensity = "high";
+      priority = "High";
+      roadClosure = true;
+      targetId = "silk-board";
+      lat = 12.9176; lng = 77.6246;
+    } else if (scenario === "vip") {
+      eventCause = "vip_movement";
+      intensity = "high";
+      priority = "High";
+      roadClosure = true;
+      targetId = "hebbal-flyover";
+      lat = 12.9716; lng = 77.5946;
+    } else if (scenario === "construction") {
+      eventCause = "construction";
+      intensity = "medium";
+      priority = "Medium";
+      roadClosure = false;
+      targetId = "kr-puram";
+      lat = 12.9716; lng = 77.5946;
+    } else if (scenario === "accident") {
+      eventCause = "accident";
+      intensity = "high";
+      priority = "High";
+      roadClosure = false;
+      targetId = "tin-factory";
+      lat = 12.9716; lng = 77.5946;
+    } else if (scenario === "sports") {
+      eventCause = "public_event";
+      intensity = "medium";
+      priority = "Medium";
+      roadClosure = false;
+      targetId = "mg-road";
+      lat = 12.9716; lng = 77.5946;
+    }
+
     try {
-      // Simulate VIP movement at silk-board
-      const payload = {
-        event_cause: "vip_movement",
-        event_type: "planned" as const,
-        priority: "High" as const,
-        requires_road_closure: true,
-        latitude: 12.9176,
-        longitude: 77.6246,
-        start_datetime: new Date().toISOString()
-      };
+      // Step A. Trigger Simulation
       await startSimulation({
-        event_type: "festival", // simulator maps to general simulation
+        event_type: scenario === "rally" || scenario === "sports" ? "festival" : "accident",
         target_type: "junction",
-        target_id: "silk-board",
-        intensity: "high"
+        target_id: targetId,
+        intensity: intensity
       });
-      await predictImpact(payload);
-      // Change views to emergency corridors to show it visually
-      setActiveTab("corridors");
-    } catch (err) {
-      console.error(err);
+
+      // Step B. Trigger Prediction
+      const predRes = await predictImpact({
+        event_cause: eventCause,
+        event_type: scenario === "rally" || scenario === "sports" ? "planned" : "unplanned",
+        priority: priority,
+        requires_road_closure: roadClosure,
+        latitude: lat,
+        longitude: lng,
+        start_datetime: new Date().toISOString()
+      });
+
+      // Step C. Trigger Resource Allocation Optimization
+      const optPlan = await optimizeAllocation({
+        impact_level: predRes.predicted_impact,
+        confidence: predRes.confidence,
+        event_type: scenario === "rally" || scenario === "sports" ? "planned" : "unplanned",
+        event_duration: 3.0,
+        event_attendance: scenario === "rally" ? 12000 : scenario === "sports" ? 25000 : 500,
+        nearby_hospitals: 2,
+        junction_criticality: 80,
+        zone: "South"
+      });
+
+      // Step D. Trigger Diversion Planning
+      await generateDiversions({
+        event_location: targetId,
+        predicted_impact_level: predRes.predicted_impact,
+        deployment_score: optPlan.deployment_score,
+        event_severity: intensity.toUpperCase(),
+        event_attendance: scenario === "rally" ? 12000 : scenario === "sports" ? 25000 : 500
+      });
+
+      // Step E. Trigger Briefing
+      await generateBriefing({
+        prediction: {
+          impact_level: predRes.predicted_impact,
+          confidence: predRes.confidence
+        },
+        feature_contributions: predRes.reasons.map((r) => {
+          const match = r.match(/^(.*?) contributed \+(\d+)%$/);
+          return {
+            feature: match ? match[1].trim() : r,
+            contribution: match ? parseFloat(match[2]) : 15.0
+          };
+        }),
+        resource_plan: {
+          deployment_score: optPlan.deployment_score,
+          officers_required: optPlan.officers_required,
+          patrol_vehicles: optPlan.patrol_vehicles,
+          barricades: optPlan.barricades,
+          diversion_level: optPlan.diversion_level,
+          emergency_corridor_required: optPlan.emergency_corridor_required,
+          estimated_response_time: optPlan.estimated_response_time,
+          estimated_operational_cost: optPlan.estimated_operational_cost
+        },
+        event_metadata: {
+          event_type: scenario === "rally" || scenario === "sports" ? "planned" : "unplanned",
+          event_cause: eventCause,
+          zone: "South",
+          junction: targetId,
+          attendance: scenario === "rally" ? 12000 : scenario === "sports" ? 25000 : 500,
+          duration: 3.0,
+          start_time: "17:00"
+        }
+      });
+    } catch (e) {
+      console.error(e);
     } finally {
       setSimRunning(false);
     }
   };
 
-  const triggerPeakGridlock = async () => {
+  // 2. Presentation Mode: "Run Complete Simulation" sequential workflow
+  const runCompleteSimulation = async () => {
     setSimRunning(true);
+    resetPrediction();
+    clearPlan();
+    clearDiversions();
+    
+    const steps = [
+      "Event Created (Festival at Silk Board)",
+      "ML Prediction (XGBoost Classifier)",
+      "Resource Optimization (deployment calculations)",
+      "Diversion Planning (routing bypasses)",
+      "Alert Generation (sensor warnings)",
+      "AI Executive Briefing (copilot synthesis)",
+      "Simulation Finished"
+    ];
+
     try {
-      const payload = {
-        event_cause: "congestion",
-        event_type: "unplanned" as const,
-        priority: "High" as const,
-        requires_road_closure: false,
-        latitude: 12.9226,
-        longitude: 77.6174,
-        start_datetime: new Date().toISOString()
-      };
+      // Step 1: Event Created
+      setCurrentStep(0);
+      await new Promise((resolve) => setTimeout(resolve, 800));
       await startSimulation({
-        event_type: "breakdown",
-        target_type: "zone",
-        target_id: "Central",
+        event_type: "festival",
+        target_type: "junction",
+        target_id: "silk-board",
         intensity: "high"
       });
-      await predictImpact(payload);
-      setActiveTab("simulator");
-    } catch (err) {
-      console.error(err);
+
+      // Step 2: ML Prediction
+      setCurrentStep(1);
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      const predRes = await predictImpact({
+        event_cause: "protest",
+        event_type: "planned",
+        priority: "High",
+        requires_road_closure: true,
+        latitude: 12.9176,
+        longitude: 77.6246,
+        start_datetime: new Date().toISOString()
+      });
+
+      // Step 3: Resource Optimization
+      setCurrentStep(2);
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      const optPlan = await optimizeAllocation({
+        impact_level: predRes.predicted_impact,
+        confidence: predRes.confidence,
+        event_type: "planned",
+        event_duration: 3.5,
+        event_attendance: 15000,
+        nearby_hospitals: 2,
+        junction_criticality: 90,
+        zone: "South"
+      });
+
+      // Step 4: Diversion Planning
+      setCurrentStep(3);
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      await generateDiversions({
+        event_location: "silk-board",
+        predicted_impact_level: predRes.predicted_impact,
+        deployment_score: optPlan.deployment_score,
+        event_severity: "HIGH",
+        event_attendance: 15000
+      });
+
+      // Step 5: Alert Generation
+      setCurrentStep(4);
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      await fetchAlerts();
+
+      // Step 6: AI Briefing
+      setCurrentStep(5);
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      await generateBriefing({
+        prediction: {
+          impact_level: predRes.predicted_impact,
+          confidence: predRes.confidence
+        },
+        feature_contributions: predRes.reasons.map((r) => {
+          const match = r.match(/^(.*?) contributed \+(\d+)%$/);
+          return {
+            feature: match ? match[1].trim() : r,
+            contribution: match ? parseFloat(match[2]) : 15.0
+          };
+        }),
+        resource_plan: {
+          deployment_score: optPlan.deployment_score,
+          officers_required: optPlan.officers_required,
+          patrol_vehicles: optPlan.patrol_vehicles,
+          barricades: optPlan.barricades,
+          diversion_level: optPlan.diversion_level,
+          emergency_corridor_required: optPlan.emergency_corridor_required,
+          estimated_response_time: optPlan.estimated_response_time,
+          estimated_operational_cost: optPlan.estimated_operational_cost
+        },
+        event_metadata: {
+          event_type: "planned",
+          event_cause: "protest",
+          zone: "South",
+          junction: "silk-board",
+          attendance: 15000,
+          duration: 3.5,
+          start_time: "18:00"
+        }
+      });
+
+      // Step 7: Completed
+      setCurrentStep(6);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    } catch (e) {
+      console.error(e);
     } finally {
       setSimRunning(false);
     }
   };
 
   const resetAllOperations = async () => {
-    setSimRunning(true);
+    setSimRunning(false);
+    setCurrentStep(null);
     try {
       if (activeSimulations.length > 0) {
         for (const sim of activeSimulations) {
@@ -120,182 +331,311 @@ export function DashboardView() {
         }
       }
       resetPrediction();
+      resetPlan();
+      clearDiversions();
       clearPlan();
     } catch (err) {
       console.error(err);
-    } finally {
-      setSimRunning(false);
     }
   };
 
   return (
     <div className="flex flex-col gap-6 p-6 h-full overflow-y-auto bg-[#080808]">
       
-      {/* Welcome Banner */}
-      <div className="flex justify-between items-center">
+      {/* Title & Presentation Controls */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-slate-950/40 border border-white/5 p-4 rounded-xl shadow-lg">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-white flex items-center gap-2">
-            Command Center Overview <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+            Executive Command Center <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_15px_rgba(16,185,129,0.5)]" />
           </h1>
-          <p className="text-slate-400 text-xs mt-0.5">Real-time predictive traffic operations & network diagnostics</p>
+          <p className="text-slate-400 text-xs mt-0.5">City-scale traffic intelligence & ML response orchestration.</p>
         </div>
-        <div className="flex items-center gap-2">
+        
+        {/* Presentation & Reset Controls */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={runCompleteSimulation}
+            disabled={simRunning}
+            className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-lg text-xs font-bold transition shadow-[0_0_20px_rgba(59,130,246,0.3)] animate-pulse hover:animate-none"
+          >
+            <Zap className="h-3.5 w-3.5 fill-white" />
+            <span>Run Complete Simulation</span>
+          </button>
+
           <button
             onClick={resetAllOperations}
-            disabled={simRunning}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-white/5 text-xs text-slate-300 transition hover:bg-white/10 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-xs text-slate-300 transition hover:bg-white/10"
           >
             <RefreshCw className="h-3.5 w-3.5" />
-            <span>Reset Command Board</span>
+            <span>Reset Board</span>
           </button>
         </div>
       </div>
 
-      {/* KPI Grid */}
-      <div className="grid grid-cols-4 gap-4">
-        {/* KPI 1 */}
-        <div className="rounded-xl border border-white/5 bg-panel p-4 flex items-center justify-between shadow-lg">
-          <div>
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Network Health</span>
-            <h3 className={`text-2xl font-black mt-1 ${avgJunctionHealth < 75 ? "text-amber-400" : "text-emerald-400"}`}>
-              {avgJunctionHealth}%
-            </h3>
-            <span className="text-[10px] text-slate-400 flex items-center gap-1 mt-1">
-              <Activity className="h-3 w-3 text-emerald-500" /> Optimal bounds
-            </span>
-          </div>
-          <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center border border-emerald-500/10">
-            <Heart className="h-5 w-5 text-emerald-400" />
-          </div>
-        </div>
-
-        {/* KPI 2 */}
-        <div className="rounded-xl border border-white/5 bg-panel p-4 flex items-center justify-between shadow-lg">
-          <div>
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Active Alerts</span>
-            <h3 className="text-2xl font-black mt-1 text-red-400">
-              {alerts.length}
-            </h3>
-            <span className="text-[10px] text-slate-400 flex items-center gap-1 mt-1">
-              <ShieldAlert className="h-3 w-3 text-red-400 animate-pulse" /> Requires attention
-            </span>
-          </div>
-          <div className="h-10 w-10 rounded-lg bg-red-500/10 flex items-center justify-center border border-red-500/10">
-            <ShieldAlert className="h-5 w-5 text-red-400" />
-          </div>
-        </div>
-
-        {/* KPI 3 */}
-        <div className="rounded-xl border border-white/5 bg-panel p-4 flex items-center justify-between shadow-lg">
-          <div>
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Active Simulators</span>
-            <h3 className={`text-2xl font-black mt-1 ${isSimulating ? "text-blue-400" : "text-slate-400"}`}>
-              {isSimulating ? "1 Active" : "Offline"}
-            </h3>
-            <span className="text-[10px] text-slate-400 flex items-center gap-1 mt-1">
-              <Cpu className="h-3 w-3 text-blue-400" /> State simulation engine
-            </span>
-          </div>
-          <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center border border-blue-500/10">
-            <Cpu className="h-5 w-5 text-blue-400" />
+      {/* Presentation Step Wizard */}
+      {currentStep !== null && (
+        <div className="rounded-xl border border-blue-500/20 bg-blue-950/5 p-4 animate-fadeIn">
+          <span className="text-[9px] font-bold uppercase tracking-widest text-blue-400 font-mono">Simulation Pipeline Status</span>
+          <div className="flex items-center justify-between mt-3 gap-2">
+            {[
+              "Event Created",
+              "ML Prediction",
+              "Resource Optimized",
+              "Diversions Planned",
+              "Alerts Generated",
+              "AI Briefing",
+              "Outcome Summary"
+            ].map((stepLabel, idx) => {
+              const isPast = idx < currentStep;
+              const isCurrent = idx === currentStep;
+              return (
+                <div key={idx} className="flex-1 flex flex-col items-center text-center gap-2">
+                  <div className={`h-6 w-6 rounded-full flex items-center justify-center border text-[10px] font-bold font-mono transition duration-300 ${
+                    isPast ? "bg-emerald-600/20 border-emerald-500 text-emerald-400" :
+                    isCurrent ? "bg-blue-600 border-blue-400 text-white animate-ping scale-110 shadow-[0_0_15px_rgba(59,130,246,0.5)]" :
+                    "bg-slate-900 border-white/5 text-slate-500"
+                  }`}>
+                    {isPast ? "✓" : idx + 1}
+                  </div>
+                  <span className={`text-[9px] font-bold uppercase tracking-wide truncate max-w-[80px] ${
+                    isCurrent ? "text-blue-400" : isPast ? "text-slate-400" : "text-slate-600"
+                  }`}>{stepLabel}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
+      )}
 
-        {/* KPI 4 */}
-        <div className="rounded-xl border border-white/5 bg-panel p-4 flex items-center justify-between shadow-lg">
-          <div>
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">ML Predicted Impact</span>
-            <h3 className={`text-2xl font-black mt-1 ${
-              prediction ? {
-                Low: "text-emerald-400",
-                Medium: "text-amber-400",
-                High: "text-orange-400",
-                Critical: "text-red-400 animate-pulse"
-              }[prediction.predicted_impact] : "text-slate-500"
-            }`}>
-              {prediction ? prediction.predicted_impact : "No Run"}
-            </h3>
-            <span className="text-[10px] text-slate-400 flex items-center gap-1 mt-1">
-              <TrendingDown className="h-3 w-3 text-slate-400" /> XGBoost classifier
-            </span>
-          </div>
-          <div className="h-10 w-10 rounded-lg bg-slate-500/10 flex items-center justify-center border border-white/5">
-            <Activity className="h-5 w-5 text-slate-400" />
-          </div>
+      {/* Executive KPIs */}
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+        {/* KPI 1: Active Incidents */}
+        <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col justify-between shadow-lg">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">Active Incidents</span>
+          <h3 className="text-2xl font-black mt-2 text-red-500 font-mono">{activeIncidentsCount}</h3>
+          <span className="text-[9px] text-slate-500 mt-1">Requires dispatch</span>
+        </div>
+
+        {/* KPI 2: Critical Predictions */}
+        <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col justify-between shadow-lg">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">Critical Warnings</span>
+          <h3 className="text-2xl font-black mt-2 text-orange-400 font-mono">{criticalPredictionsCount}</h3>
+          <span className="text-[9px] text-slate-500 mt-1">Severe drift alerts</span>
+        </div>
+
+        {/* KPI 3: Avg Response Time */}
+        <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col justify-between shadow-lg">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">Avg Response Time</span>
+          <h3 className="text-2xl font-black mt-2 text-slate-200 font-mono">
+            {operationsPlan?.estimated_response_time ?? "12 mins"}
+          </h3>
+          <span className="text-[9px] text-slate-500 mt-1">Emergency benchmark</span>
+        </div>
+
+        {/* KPI 4: Diversions */}
+        <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col justify-between shadow-lg">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">Diversions Active</span>
+          <h3 className="text-2xl font-black mt-2 text-purple-400 font-mono">
+            {diversionPlan ? "Active" : "None"}
+          </h3>
+          <span className="text-[9px] text-slate-500 mt-1">Bypass routes active</span>
+        </div>
+
+        {/* KPI 5: Emergency Corridors */}
+        <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col justify-between shadow-lg">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">Corridors Active</span>
+          <h3 className="text-2xl font-black mt-2 text-blue-400 font-mono">
+            {operationsPlan?.emergency_corridor_required ? "Active" : "None"}
+          </h3>
+          <span className="text-[9px] text-slate-500 mt-1">Hospital lanes active</span>
+        </div>
+
+        {/* KPI 6: Prediction Accuracy */}
+        <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col justify-between shadow-lg">
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">ML Accuracy</span>
+          <h3 className="text-2xl font-black mt-2 text-emerald-400 font-mono">80.2%</h3>
+          <span className="text-[9px] text-slate-500 mt-1">XGBoost validation</span>
         </div>
       </div>
 
-      {/* Main Grid: Left is quick actions, recent lists. Right is the map preview. */}
+      {/* Main Command Workspace */}
       <div className="grid grid-cols-12 gap-6 min-h-0 flex-1">
         
-        {/* Left column (5 cols) */}
-        <div className="col-span-5 flex flex-col gap-6 overflow-y-auto pr-1">
-          {/* Quick Actions */}
+        {/* Left Side: Demo Triggers, SVG Charts, City Intelligence (6 cols) */}
+        <div className="col-span-6 flex flex-col gap-6">
+          
+          {/* Demo Scenario Triggers */}
           <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col gap-3 shadow-lg">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Quick Demorun triggers</h3>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={triggerVIPCorridor}
-                disabled={simRunning}
-                className="flex items-center justify-center gap-2 p-3 rounded-lg border border-blue-500/20 bg-blue-500/5 text-xs text-blue-400 transition hover:bg-blue-500/10 font-bold text-center"
-              >
-                <Play className="h-3.5 w-3.5 fill-blue-400" />
-                <span>Simulate VIP Corridor</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={triggerPeakGridlock}
-                disabled={simRunning}
-                className="flex items-center justify-center gap-2 p-3 rounded-lg border border-orange-500/20 bg-orange-500/5 text-xs text-orange-400 transition hover:bg-orange-500/10 font-bold text-center"
-              >
-                <Play className="h-3.5 w-3.5 fill-orange-400" />
-                <span>Simulate Peak Gridlock</span>
-              </button>
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-1">
+              <Compass className="h-4 w-4 text-blue-400" /> One-Click Scenario Triggers
+            </h3>
+            <div className="grid grid-cols-5 gap-2">
+              {[
+                { id: "rally" as const, label: "Rally", color: "bg-red-600/10 border-red-500/20 text-red-400 hover:bg-red-500/20" },
+                { id: "vip" as const, label: "VIP", color: "bg-purple-600/10 border-purple-500/20 text-purple-400 hover:bg-purple-500/20" },
+                { id: "construction" as const, label: "Work", color: "bg-amber-600/10 border-amber-500/20 text-amber-400 hover:bg-amber-500/20" },
+                { id: "accident" as const, label: "Crash", color: "bg-orange-600/10 border-orange-500/20 text-orange-400 hover:bg-orange-500/20" },
+                { id: "sports" as const, label: "Sports", color: "bg-blue-600/10 border-blue-500/20 text-blue-400 hover:bg-blue-500/20" }
+              ].map((scen) => (
+                <button
+                  key={scen.id}
+                  type="button"
+                  onClick={() => triggerDemoScenario(scen.id)}
+                  disabled={simRunning}
+                  className={`py-2 px-1 rounded-lg border text-center text-[10px] font-bold uppercase transition flex flex-col items-center justify-center gap-1 ${scen.color}`}
+                >
+                  <Play className="h-3 w-3 fill-current" />
+                  <span>{scen.label}</span>
+                </button>
+              ))}
             </div>
           </div>
 
-          <DeploymentPlanCard />
+          {/* SVG Analytics Charts (Zone Risks, Allocations, Distributions) */}
+          <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col gap-4 shadow-lg">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-1">
+              <Activity className="h-4 w-4 text-blue-400" /> Command Analytics & Trends
+            </h3>
 
-          {/* Recent Alerts List */}
-          <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col gap-3 shadow-lg flex-1 min-h-[200px]">
-            <div className="flex justify-between items-center border-b border-white/10 pb-2">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Active Operator Alerts</h3>
-              <button onClick={() => setActiveTab("alerts")} className="text-xs text-blue-400 hover:underline flex items-center gap-0.5">
-                Manage <ChevronRight className="h-3 w-3" />
-              </button>
+            <div className="grid grid-cols-2 gap-4">
+              {/* Chart 1: Zone Risk Trends */}
+              <div className="bg-slate-950/40 border border-white/5 rounded-lg p-3 flex flex-col gap-2">
+                <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider block">Zone Risk Levels</span>
+                <svg className="w-full h-24 mt-1" viewBox="0 0 100 40">
+                  <path d="M 0,35 Q 25,20 50,28 T 100,5" fill="none" stroke="rgba(239,68,68,0.5)" strokeWidth="1.5" />
+                  <path d="M 0,35 Q 25,30 50,15 T 100,10" fill="none" stroke="rgba(59,130,246,0.5)" strokeWidth="1.5" />
+                  <circle cx="50" cy="28" r="1.5" fill="red" />
+                  <circle cx="100" cy="10" r="1.5" fill="blue" />
+                </svg>
+                <div className="flex justify-between text-[8px] text-slate-500 font-mono mt-1">
+                  <span>South Zone (High)</span>
+                  <span>Central Zone (Low)</span>
+                </div>
+              </div>
+
+              {/* Chart 2: Resource Allocation Trends */}
+              <div className="bg-slate-950/40 border border-white/5 rounded-lg p-3 flex flex-col gap-2">
+                <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider block">Resource Utilisation</span>
+                <div className="flex flex-col gap-2 mt-1.5">
+                  {[
+                    { label: "Officers Deployed", pct: 78, color: "bg-blue-500" },
+                    { label: "Barricades Deployed", pct: 45, color: "bg-orange-500" },
+                    { label: "Patrol Vehicles", pct: 60, color: "bg-purple-500" }
+                  ].map((item, idx) => (
+                    <div key={idx} className="flex flex-col gap-0.5">
+                      <div className="flex justify-between text-[8px] text-slate-400 font-mono">
+                        <span>{item.label}</span>
+                        <span>{item.pct}%</span>
+                      </div>
+                      <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                        <div className={`h-full ${item.color}`} style={{ width: `${item.pct}%` }} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-            {alerts.length === 0 ? (
-              <div className="flex flex-col items-center justify-center text-center p-6 flex-1 text-slate-500 text-xs">
-                All corridors clear. No warnings triggered.
+          </div>
+
+          {/* City Intelligence & Hotspots */}
+          <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col gap-3 shadow-lg">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-1">
+              <Layers className="h-4 w-4 text-blue-400" /> City Intelligence Overview
+            </h3>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="p-3 bg-slate-950/30 border border-white/5 rounded-lg">
+                <span className="text-[9px] text-slate-500 font-mono uppercase tracking-wider">High-Risk Zones</span>
+                <p className="text-red-400 font-bold mt-1">South Zone (Critical)</p>
+                <p className="text-[9px] text-slate-500 mt-0.5">Primary bottleneck: Silk Board Junction</p>
+              </div>
+
+              <div className="p-3 bg-slate-950/30 border border-white/5 rounded-lg">
+                <span className="text-[9px] text-slate-500 font-mono uppercase tracking-wider">Event Hotspots</span>
+                <p className="text-amber-400 font-bold mt-1">Central Zone (Planned)</p>
+                <p className="text-[9px] text-slate-500 mt-0.5">Rally and festival simulations active</p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Right Side: Map HUD Preview, Executive Briefings (6 cols) */}
+        <div className="col-span-6 flex flex-col gap-6">
+          
+          {/* Map Preview Viewport */}
+          <div className="rounded-xl border border-white/5 bg-panel overflow-hidden shadow-lg relative h-72">
+            <div className="absolute top-4 left-4 z-10 bg-black/75 px-3 py-1.5 rounded-lg border border-white/10 backdrop-blur-md">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-200 flex items-center gap-1.5">
+                <MapPin className="h-3.5 w-3.5 text-blue-500" /> Control Room Viewport
+              </span>
+            </div>
+            <MapPreview />
+          </div>
+
+          {/* Executive Briefings (AI Traffic Commander integrated) */}
+          <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col gap-4 shadow-lg">
+            <div className="flex justify-between items-center border-b border-white/10 pb-2">
+              <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-1.5">
+                <Award className="h-4 w-4 text-purple-400 animate-pulse" /> AI Executive Command Briefings
+              </h3>
+              {briefing && (
+                <span className={`px-2 py-0.5 rounded text-[8px] font-mono font-bold border uppercase tracking-wider ${
+                  briefing.generated_by === "gemini" ? "bg-purple-500/10 text-purple-400 border-purple-500/20" : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+                }`}>
+                  {briefing.generated_by} Mode
+                </span>
+              )}
+            </div>
+
+            {briefing ? (
+              <div className="flex flex-col gap-3.5 animate-fadeIn">
+                {/* Daily Operational Summary */}
+                <div className="bg-white/[0.01] border border-white/5 rounded-lg p-3">
+                  <span className="text-[9px] font-bold text-slate-500 uppercase tracking-widest font-mono">Daily Operational Summary</span>
+                  <p className="text-xs text-slate-300 leading-relaxed mt-1 font-medium">{briefing.summary}</p>
+                </div>
+
+                {/* Commissioner Briefing Mode */}
+                {briefing.commissioner_briefing && (
+                  <div className="bg-blue-500/5 border border-blue-500/15 rounded-lg p-3">
+                    <span className="text-[9px] font-bold text-blue-400 uppercase tracking-widest font-mono flex items-center gap-1">
+                      <UserCheck className="h-3 w-3" /> Commissioner Briefing Mode
+                    </span>
+                    <p className="text-xs text-slate-300 leading-relaxed mt-1">{briefing.commissioner_briefing}</p>
+                  </div>
+                )}
+
+                {/* Risk Forecast / Alert */}
+                <div className="bg-red-500/5 border border-red-500/15 rounded-lg p-3">
+                  <span className="text-[9px] font-bold text-red-400 uppercase tracking-widest font-mono flex items-center gap-1">
+                    <ShieldAlert className="h-3 w-3" /> Risk Forecast (Top 3)
+                  </span>
+                  <ul className="flex flex-col gap-1 mt-1.5">
+                    {briefing.risks.slice(0, 3).map((risk, index) => (
+                      <li key={index} className="text-xs text-slate-300 flex items-start gap-1">
+                        <span className="text-red-500">•</span>
+                        <span>{risk}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
             ) : (
-              <div className="flex flex-col gap-2 overflow-y-auto max-h-[240px]">
-                {alerts.map((alert) => (
-                  <div key={alert.alert_id} className="p-3 rounded-lg bg-white/5 border border-white/5 flex flex-col gap-1 text-xs">
-                    <div className="flex justify-between items-center">
-                      <span className="font-bold text-slate-200">{alert.alert_type}</span>
-                      <span className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-400 text-[10px]">Conf {alert.confidence}%</span>
-                    </div>
-                    <p className="text-slate-400 text-[11px] leading-relaxed">{alert.message}</p>
-                  </div>
-                ))}
+              <div className="text-center py-12 border border-dashed border-white/10 bg-slate-950/20 rounded-lg flex flex-col items-center justify-center gap-2">
+                <Sparkles className="h-6 w-6 text-slate-600 animate-pulse" />
+                <span className="text-xs font-bold text-slate-400">Briefing Standby</span>
+                <p className="text-[10px] text-slate-500 max-w-[200px] leading-relaxed">
+                  Start a demo scenario or click Run Complete Simulation to compile briefings.
+                </p>
               </div>
             )}
           </div>
+
         </div>
 
-        {/* Right column (7 cols) - Map Preview */}
-        <div className="col-span-7 flex flex-col gap-2 rounded-xl border border-white/5 bg-panel overflow-hidden shadow-lg relative min-h-[350px]">
-          <div className="absolute top-4 left-4 z-10 bg-black/75 px-3 py-1.5 rounded-lg border border-white/10 backdrop-blur-md">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-200 flex items-center gap-1.5">
-              <MapPin className="h-3.5 w-3.5 text-blue-500" /> Live Viewport Map
-            </span>
-          </div>
-          <MapPreview />
-        </div>
       </div>
+
     </div>
   );
 }
+export default DashboardView;

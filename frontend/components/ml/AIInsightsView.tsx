@@ -6,6 +6,7 @@ import { useOperationsStore } from "@/store/useOperationsStore";
 import { useDiversionStore } from "@/store/useDiversionStore";
 import { useSimulationStore } from "@/store/useSimulationStore";
 import { TrafficCommanderCard } from "./TrafficCommanderCard";
+import { LearningDashboard } from "./LearningDashboard";
 import { BrainCircuit, Cpu, Compass, Database, Activity, History } from "lucide-react";
 
 export function AIInsightsView() {
@@ -180,6 +181,12 @@ export function AIInsightsView() {
           onRegenerate={handleRegenerateBriefing}
         />
       </div>
+
+      {/* Post-Event Continuous Learning System */}
+      <div className="w-full">
+        <LearningDashboard />
+      </div>
+
 
       <div className="grid grid-cols-12 gap-6 min-h-0 flex-1 animate-fadeIn">
         {/* Left Column: Diagnostics and Importances (6 cols) */}
