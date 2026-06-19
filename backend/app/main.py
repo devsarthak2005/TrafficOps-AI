@@ -24,6 +24,7 @@ from .routers.operations import router as operations_router
 from .routers.diversions import router as diversions_router
 from .routers.replay import router as replay_router
 from .routers.copilot import router as copilot_router
+from .routers.alerts_router import router as api_alerts_router
 
 logger = logging.getLogger(__name__)
 
@@ -90,5 +91,7 @@ app.include_router(operations_router)
 app.include_router(diversions_router)
 app.include_router(replay_router)
 app.include_router(copilot_router)
+app.include_router(api_alerts_router, prefix="/api")
+
 
 

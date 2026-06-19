@@ -18,3 +18,32 @@ class DismissResponse(BaseModel):
     alert_id: str
     status: str
     suppressed_until: str
+
+
+class AlertPayload(BaseModel):
+    alert_id: str
+    severity: str  # "Watch", "Warning", "Critical"
+    title: str
+    description: str
+    confidence: float
+    created_at: str
+    status: str  # "active", "acknowledged", "resolved"
+
+
+class AcknowledgeRequest(BaseModel):
+    alert_id: str
+
+
+class AcknowledgeResponse(BaseModel):
+    alert_id: str
+    status: str
+
+
+class ResolveRequest(BaseModel):
+    alert_id: str
+
+
+class ResolveResponse(BaseModel):
+    alert_id: str
+    status: str
+

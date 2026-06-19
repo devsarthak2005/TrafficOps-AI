@@ -13,3 +13,14 @@ export interface DismissResponse {
   status: string;
   suppressed_until: string;
 }
+
+export interface AlertPayload {
+  alert_id: string;
+  severity: "Watch" | "Warning" | "Critical";
+  title: string;
+  description: string;
+  confidence: number;
+  created_at: string;
+  status: "active" | "acknowledged" | "resolved";
+}
+

@@ -54,6 +54,16 @@ def create_tables() -> None:
                 description   TEXT NOT NULL DEFAULT ''
             );
 
+            CREATE TABLE IF NOT EXISTS alerts (
+                alert_id    TEXT PRIMARY KEY,
+                severity    TEXT NOT NULL,
+                title       TEXT NOT NULL,
+                description TEXT NOT NULL,
+                confidence  REAL NOT NULL,
+                created_at  TEXT NOT NULL,
+                status      TEXT NOT NULL DEFAULT 'active'
+            );
+
             CREATE INDEX IF NOT EXISTS idx_incidents_junction_id
                 ON incidents(junction_id);
             CREATE INDEX IF NOT EXISTS idx_incidents_timestamp
