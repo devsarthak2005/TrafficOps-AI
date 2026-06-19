@@ -204,6 +204,76 @@ class PredictorService:
             if not reasons_formatted:
                 reasons_formatted = ["Baseline feature distribution"]
 
+            # Multi-Event Collision Detection logic
+            multiplier = 1.0
+            is_collision_flagged = False
+            
+            try:
+                from datetime import datetime, timezone
+                from .collision_detector import get_active_events_from_db, detect_collisions, Event
+                
+                # Parse start_datetime
+                start_dt_raw = request_data.get('start_datetime')
+                if start_dt_raw:
+                    try:
+                        start_dt = datetime.fromisoformat(start_dt_raw.replace("Z", "+00:00"))
+                    except Exception:
+                        start_dt = datetime.now(timezone.utc)
+                else:
+                    start_dt = datetime.now(timezone.utc)
+                
+                candidate_event = Event(
+                    id="temp_prediction",
+                    event_cause=request_data.get('event_cause', 'others'),
+                    latitude=float(request_data.get('latitude', 12.9716)),
+                    longitude=float(request_data.get('longitude', 77.5946)),
+                    start_datetime=start_dt,
+                    junction_id="Unknown"
+                )
+                
+                db_events = get_active_events_from_db(hours=24.0)
+                db_events = [e for e in db_events if e.id != "temp_prediction"]
+                all_events = db_events + [candidate_event]
+                
+                collision_groups = detect_collisions(all_events)
+                for group in collision_groups:
+                    if "temp_prediction" in group.event_ids:
+                        multiplier = group.combined_impact_multiplier
+                        is_collision_flagged = True
+                        break
+            except Exception as ce:
+                logger.error(f"Error checking collision groups in predictor: {ce}")
+
+            # Apply multiplier and adjust predicted class
+            class_to_score = {
+                "Low": 0.25,
+                "Medium": 0.50,
+                "High": 0.75,
+                "Critical": 1.0
+            }
+            
+            if is_collision_flagged and multiplier > 1.0:
+                base_score = class_to_score.get(predicted_impact, 0.50)
+                boosted_score = min(1.0, base_score * multiplier)
+                
+                # Map back to escalated class
+                if boosted_score <= 0.35:
+                    escalated_impact = "Low"
+                elif boosted_score <= 0.65:
+                    escalated_impact = "Medium"
+                elif boosted_score <= 0.85:
+                    escalated_impact = "High"
+                else:
+                    escalated_impact = "Critical"
+                
+                if escalated_impact != predicted_impact:
+                    logger.info(f"Collision flagged: escalating predicted impact from {predicted_impact} to {escalated_impact} due to multiplier {multiplier}")
+                    predicted_impact = escalated_impact
+                
+                if reasons_formatted == ["Baseline feature distribution"]:
+                    reasons_formatted = []
+                reasons_formatted.insert(0, f"Multi-event collision detected (x{multiplier} multiplier)")
+
             # 6. Generate human-readable explanation matching the requested format
             explanation_lines = [
                 f"Predicted Impact: {predicted_impact}",

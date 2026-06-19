@@ -14,8 +14,20 @@ from ..schemas.prediction import (
 )
 from ..services.predictor import predictor_service
 from ..services.recommendation_engine import get_recommendations
+from ..services.collision_detector import get_active_events_from_db, detect_collisions, CollisionFlag
 
 router = APIRouter()
+
+
+@router.get("/ml/collision-detect", response_model=list[CollisionFlag])
+@router.get("/api/ml/collision-detect", response_model=list[CollisionFlag])
+def get_active_collisions() -> list[CollisionFlag]:
+    """
+    Detect multi-event collision clusters currently active in the database (within last 24 hours).
+    """
+    events = get_active_events_from_db(hours=24.0)
+    return detect_collisions(events)
+
 
 
 @router.post("/ml/predict", response_model=PredictionResponse)

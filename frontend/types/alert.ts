@@ -6,6 +6,8 @@ export interface Alert {
   confidence: number;
   message: string;
   generated_at: string;
+  status?: string;
+  severity?: string;
 }
 
 export interface DismissResponse {

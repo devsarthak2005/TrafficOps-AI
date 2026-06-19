@@ -8,8 +8,18 @@ import {
   resolveAlert as apiResolveAlert
 } from "@/lib/api/alerts";
 
+export interface CollisionGroup {
+  event_ids: string[];
+  num_overlapping: number;
+  combined_impact_multiplier: number;
+  junctions_affected: string[];
+  event_causes: string[];
+  min_distance_km: number;
+}
+
 interface AlertStoreState {
   alerts: Alert[];
+  collisions: CollisionGroup[];
   predictiveAlerts: AlertPayload[];
   loading: boolean;
   error: string | null;
@@ -26,6 +36,7 @@ interface AlertStoreState {
 
 export const useAlertStore = create<AlertStoreState>((set, get) => ({
   alerts: [],
+  collisions: [],
   predictiveAlerts: [],
   loading: false,
   error: null,
@@ -37,8 +48,24 @@ export const useAlertStore = create<AlertStoreState>((set, get) => ({
       if (get().alerts.length === 0 && !get().error) {
         set({ loading: true });
       }
-      const data = await getActiveAlerts();
-      set({ alerts: data, error: null, loading: false });
+      
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+      
+      const [alertsData, collisionsData] = await Promise.all([
+        getActiveAlerts(),
+        (async () => {
+          try {
+            const res = await fetch(`${baseUrl}/ml/collision-detect`);
+            if (!res.ok) throw new Error("Failed to fetch collisions");
+            return await res.json() as CollisionGroup[];
+          } catch (e) {
+            console.error("Collision fetch failed:", e);
+            return [] as CollisionGroup[];
+          }
+        })()
+      ]);
+
+      set({ alerts: alertsData, collisions: collisionsData, error: null, loading: false });
     } catch (err) {
       console.error("Failed to fetch alerts:", err);
       set({ error: "Failed to load active alerts", loading: false });
