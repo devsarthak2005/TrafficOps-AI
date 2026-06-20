@@ -26,6 +26,13 @@ export interface FeatureImportance {
   importance: number;
 }
 
+export interface HotspotPrediction {
+  junction_id: string;
+  junction_name: string;
+  traffic_increase_pct: number;
+  distance_km: number;
+}
+
 export interface NoInterventionStep {
   time_minutes: number;
   time_label: string;
@@ -57,6 +64,8 @@ interface MLState {
   isGeneratingBriefing: boolean;
   noInterventionData: NoInterventionData | null;
   isSimulatingNoIntervention: boolean;
+  secondaryHotspots: HotspotPrediction[];
+  isFetchingHotspots: boolean;
   predictImpact: (payload: {
     event_cause: string;
     event_type: "planned" | "unplanned";
@@ -96,6 +105,13 @@ interface MLState {
     };
   }) => Promise<CopilotBriefing>;
   simulateNoIntervention: (junctionId: string, currentRiskScore: number) => Promise<NoInterventionData>;
+  fetchSecondaryHotspots: (payload: {
+    latitude: number;
+    longitude: number;
+    event_type: string;
+    start_datetime: string;
+  }) => Promise<void>;
+  clearSecondaryHotspots: () => void;
   resetPrediction: () => void;
 }
 
@@ -108,6 +124,8 @@ export const useMLStore = create<MLState>((set, get) => ({
   isGeneratingBriefing: false,
   noInterventionData: null,
   isSimulatingNoIntervention: false,
+  secondaryHotspots: [],
+  isFetchingHotspots: false,
 
   predictImpact: async (payload) => {
     set({ isPredicting: true });
@@ -212,6 +230,30 @@ export const useMLStore = create<MLState>((set, get) => ({
     }
   },
 
-  resetPrediction: () => set({ prediction: null, briefing: null, noInterventionData: null }),
+  fetchSecondaryHotspots: async (payload) => {
+    set({ isFetchingHotspots: true });
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+      const response = await fetch(`${baseUrl}/ml/crowd-movement`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error("Crowd movement simulation failed");
+      }
+
+      const data = await response.json();
+      set({ secondaryHotspots: data.hotspots, isFetchingHotspots: false });
+    } catch (err) {
+      console.error("Crowd movement fetch error:", err);
+      set({ isFetchingHotspots: false });
+    }
+  },
+
+  clearSecondaryHotspots: () => set({ secondaryHotspots: [] }),
+
+  resetPrediction: () => set({ prediction: null, briefing: null, noInterventionData: null, secondaryHotspots: [] }),
 }));
 

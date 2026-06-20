@@ -1,10 +1,9 @@
 "use client";
 
 import type { JunctionSummary } from "@/types/junction";
-
 import { getStatusBadgeClass } from "@/lib/statusColors";
-
 import { useAppStore } from "@/store/useAppStore";
+import { useMLStore } from "@/store/useMLStore";
 
 function riskLabel(risk: string): string {
   return risk.charAt(0).toUpperCase() + risk.slice(1);
@@ -72,9 +71,21 @@ function StatRow({ label, value }: StatRowProps) {
 
 export function JunctionHoverCard({ summary }: JunctionHoverCardProps) {
   const openResourcePanel = useAppStore((state) => state.openResourcePanel);
+  const secondaryHotspots = useMLStore((state) => state.secondaryHotspots);
+  const hotspot = secondaryHotspots?.find((h) => h.junction_id === summary.junction_id);
 
   return (
     <div className="w-[280px] rounded-xl border border-white/10 bg-elevated p-4 shadow-xl shadow-black/40">
+      {/* Crowd Spillover Hotspot Banner */}
+      {hotspot && (
+        <div className="mb-3 rounded bg-orange-500/15 border border-orange-500/30 p-2 text-center text-xs font-bold text-orange-400 animate-pulse">
+          ⚠️ Crowd Spillover Hotspot
+          <div className="text-[10px] font-medium text-slate-300 mt-0.5">
+            Projected traffic: +{hotspot.traffic_increase_pct}%
+          </div>
+        </div>
+      )}
+
       {/* Header: Name + Risk badge */}
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-[15px] font-bold leading-tight text-white">

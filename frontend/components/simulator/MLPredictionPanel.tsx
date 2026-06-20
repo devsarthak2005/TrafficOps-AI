@@ -5,7 +5,7 @@ import { useMLStore } from "@/store/useMLStore";
 import { Shield, ShieldAlert, CheckCircle, Info, HelpCircle } from "lucide-react";
 
 export function MLPredictionPanel() {
-  const { prediction, isPredicting } = useMLStore();
+  const { prediction, isPredicting, secondaryHotspots } = useMLStore();
 
   if (isPredicting) {
     return (
@@ -84,6 +84,25 @@ export function MLPredictionPanel() {
           ))}
         </ul>
       </div>
+
+      {/* Secondary Hotspots Spillover */}
+      {secondaryHotspots && secondaryHotspots.length > 0 && (
+        <div className="border-t border-white/10 pt-3.5 flex flex-col gap-2">
+          <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+            <ShieldAlert className="h-4 w-4 text-orange-400 animate-pulse" /> Crowd Spillover Hotspots (Heuristic)
+          </h4>
+          <div className="grid grid-cols-3 gap-2.5 mt-1">
+            {secondaryHotspots.map((hotspot) => (
+              <div key={hotspot.junction_id} className="rounded-lg border border-orange-500/15 bg-orange-500/[0.02] p-2.5 flex flex-col gap-0.5 shadow-sm">
+                <span className="text-[10px] font-bold text-white truncate">{hotspot.junction_name}</span>
+                <span className="text-[11px] font-black text-orange-400">+{hotspot.traffic_increase_pct}% traffic</span>
+                <span className="text-[9px] text-slate-500 font-mono mt-0.5">{hotspot.distance_km.toFixed(1)} km away</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

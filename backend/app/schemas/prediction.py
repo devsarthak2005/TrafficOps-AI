@@ -119,3 +119,23 @@ class SimulationNoInterventionResponse(BaseModel):
     max_emergency_delay_minutes: float
     assumptions: dict[str, float | str]
 
+
+class CrowdMovementRequest(BaseModel):
+    latitude: float
+    longitude: float
+    event_type: str
+    start_datetime: str
+
+
+class HotspotPrediction(BaseModel):
+    junction_id: str
+    junction_name: str
+    traffic_increase_pct: float
+    distance_km: float
+
+
+class CrowdMovementResponse(BaseModel):
+    method: str = "proximity_heuristic"
+    hotspots: list[HotspotPrediction]
+
+

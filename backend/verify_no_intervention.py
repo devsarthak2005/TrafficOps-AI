@@ -41,8 +41,8 @@ def verify_no_intervention():
     assert res.vehicles_affected_estimate == 100 # arterial hourly is 200, half-hourly is 100
     assert len(res.timeline) == 9 # 4 hours * 2 + 1 = 9 steps
     assert res.timeline[0].risk_score == 90.0
-    assert res.timeline[1].risk_score == 100.0 # escalated by 15% and capped
-    assert res.timeline[1].congestion_class == "Gridlock"
+    assert res.timeline[1].risk_score == 93.5 # escalated by 35% of remaining risk (90.0 + (100 - 90)*0.35 = 93.5)
+    assert res.timeline[1].congestion_class == "Critical"
     assert res.total_fuel_loss_liters > 0
     assert res.total_economic_loss_inr > 0
     assert res.max_emergency_delay_minutes > 0

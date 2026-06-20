@@ -13,6 +13,7 @@ import { Play, Sparkles, AlertTriangle, ArrowRight, ShieldCheck, CheckSquare, Ca
 const EVENT_OPTIONS = [
   { value: "festival", label: "Festival" },
   { value: "political_rally", label: "Political Rally" },
+  { value: "sports_event", label: "Sports Event" },
   { value: "accident", label: "Accident" },
   { value: "breakdown", label: "Breakdown" },
   { value: "construction", label: "Construction" },
@@ -28,6 +29,8 @@ export function EventSimulatorView() {
   const isSimulating = useSimulationStore((state) => state.isSimulating);
   const predictImpact = useMLStore((state) => state.predictImpact);
   const simulateNoIntervention = useMLStore((state) => state.simulateNoIntervention);
+  const fetchSecondaryHotspots = useMLStore((state) => state.fetchSecondaryHotspots);
+  const clearSecondaryHotspots = useMLStore((state) => state.clearSecondaryHotspots);
   const prediction = useMLStore((state) => state.prediction);
   const optimizeAllocation = useOperationsStore((state) => state.optimizeAllocation);
   const generateDiversions = useDiversionStore((state) => state.generateDiversions);
@@ -82,6 +85,7 @@ export function EventSimulatorView() {
       const causeMap: Record<string, string> = {
         festival: "public_event",
         political_rally: "protest",
+        sports_event: "public_event",
         accident: "accident",
         breakdown: "vehicle_breakdown",
         construction: "construction",
@@ -90,7 +94,7 @@ export function EventSimulatorView() {
 
       const mlPayload = {
         event_cause: causeMap[eventType] || "others",
-        event_type: ["festival", "political_rally"].includes(eventType) ? ("planned" as const) : ("unplanned" as const),
+        event_type: ["festival", "political_rally", "sports_event"].includes(eventType) ? ("planned" as const) : ("unplanned" as const),
         priority: intensity === "high" ? ("High" as const) : intensity === "medium" ? ("Medium" as const) : ("Low" as const),
         requires_road_closure: requiresRoadClosure,
         latitude: lat,
@@ -168,6 +172,18 @@ export function EventSimulatorView() {
       };
       const currentRisk = riskScoreMap[predRes.predicted_impact] || 50.0;
       await simulateNoIntervention(diversionLocation, currentRisk);
+
+      // 7. Trigger Crowd Movement Predictor (Feature 15) automatically for crowd events!
+      if (["festival", "political_rally", "sports_event"].includes(eventType)) {
+        await fetchSecondaryHotspots({
+          latitude: lat,
+          longitude: lng,
+          event_type: eventType,
+          start_datetime: new Date(startDatetime).toISOString(),
+        });
+      } else {
+        clearSecondaryHotspots();
+      }
 
     } catch (err) {
       console.error(err);

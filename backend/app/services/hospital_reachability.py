@@ -21,7 +21,8 @@ def get_hospital_access_junctions(
     hospital: Hospital, 
     n: int = 2, 
     include_simulated: bool = False, 
-    now=None
+    now=None,
+    risk_override: dict[str, str] | None = None
 ) -> list[dict[str, Any]]:
     """Return the nearest n access junctions for a hospital, sorted by adjusted travel time."""
     with get_cursor() as cur:
@@ -34,7 +35,19 @@ def get_hospital_access_junctions(
         dist_km = haversine_distance(hospital["lat"], hospital["lng"], j["lat"], j["lng"])
         
         # Pull junction risk category
-        health = compute_health_score(j["id"], include_simulated=include_simulated, now=now)
+        if risk_override and j["id"] in risk_override:
+            risk_cat = risk_override[j["id"]]
+            cat_health_map = {
+                "healthy": 95,
+                "moderate": 75,
+                "watchlist": 60,
+                "critical": 25
+            }
+            health_score = cat_health_map.get(risk_cat, 100)
+            health = {"health_score": health_score, "risk_category": risk_cat}
+        else:
+            health = compute_health_score(j["id"], include_simulated=include_simulated, now=now)
+            
         risk_cat = health["risk_category"]
         
         # Congestion-aware speed mapping (watchlist or critical -> 15 km/h, else 30 km/h)
@@ -58,14 +71,21 @@ def get_hospital_access_junctions(
 def compute_hospital_accessibility(
     hospital_id: str, 
     include_simulated: bool = False, 
-    now=None
+    now=None,
+    risk_override: dict[str, str] | None = None
 ) -> dict[str, Any]:
     hospital = get_hospital_by_id(hospital_id)
     if not hospital:
         raise ValueError(f"Hospital not found: {hospital_id}")
 
     # Re-rank and extract nearest n junctions by travel time
-    access_junctions = get_hospital_access_junctions(hospital, n=2, include_simulated=include_simulated, now=now)
+    access_junctions = get_hospital_access_junctions(
+        hospital, 
+        n=2, 
+        include_simulated=include_simulated, 
+        now=now,
+        risk_override=risk_override
+    )
     
     # Calculate average travel time
     avg_travel_time = sum(j["travel_time_min"] for j in access_junctions) / len(access_junctions) if access_junctions else 0.0
@@ -104,11 +124,15 @@ def compute_hospital_accessibility(
         "access_junctions": access_junctions_detail
     }
 
-def get_all_hospitals_status(include_simulated: bool = False, now=None) -> list[dict[str, Any]]:
+def get_all_hospitals_status(
+    include_simulated: bool = False, 
+    now=None,
+    risk_override: dict[str, str] | None = None
+) -> list[dict[str, Any]]:
     hospitals = get_all_hospitals()
     statuses = []
     for h in hospitals:
-        status = compute_hospital_accessibility(h["id"], include_simulated, now)
+        status = compute_hospital_accessibility(h["id"], include_simulated, now, risk_override=risk_override)
         statuses.append({
             "hospital_id": status["hospital_id"],
             "hospital_name": status["hospital_name"],
@@ -118,4 +142,5 @@ def get_all_hospitals_status(include_simulated: bool = False, now=None) -> list[
             "accessibility_band": status["accessibility_band"]
         })
     return statuses
+
 

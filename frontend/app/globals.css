@@ -65,3 +65,22 @@ button {
   animation: critical-pulse 2s infinite;
 }
 
+/* ------------------------------------------------------------------ */
+/* Hotspot marker pulse animation                                    */
+/* ------------------------------------------------------------------ */
+@keyframes hotspot-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(249, 115, 22, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(249, 115, 22, 0);
+  }
+}
+
+.animate-hotspot-pulse {
+  animation: hotspot-pulse 2s infinite;
+}
+

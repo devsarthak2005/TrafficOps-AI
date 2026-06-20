@@ -5,6 +5,7 @@ import { Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import { useMapStore } from "@/store/useMapStore";
 import { useSimulationStore } from "@/store/useSimulationStore";
+import { useMLStore } from "@/store/useMLStore";
 import { getJunctionSummary } from "@/lib/api/junctions";
 import { getStatusHex } from "@/lib/statusColors";
 import {
@@ -39,6 +40,11 @@ export function JunctionMarker({ junction }: JunctionMarkerProps) {
     sim.affected_junction_ids.includes(junction.id)
   );
 
+  // --- Secondary Hotspots logic ---
+  const secondaryHotspots = useMLStore((state) => state.secondaryHotspots);
+  const hotspot = secondaryHotspots.find((h) => h.junction_id === junction.id);
+  const isHotspot = !!hotspot;
+
   // --- Hover interaction logic ---
   const [isHovered, setIsHovered] = useState(false);
   const [summary, setSummary] = useState<JunctionSummary | null>(null);
@@ -72,17 +78,20 @@ export function JunctionMarker({ junction }: JunctionMarkerProps) {
     if (isSelected) classes += " ring-2 ring-white ring-offset-2 ring-offset-base";
     if (isCritical) classes += " animate-critical-pulse";
     if (isSimulated) classes += " outline-dashed outline-2 outline-white/70 outline-offset-2";
+    if (isHotspot) classes += " animate-hotspot-pulse ring-4 ring-orange-500/50 ring-offset-1";
+
+    const displayColor = isHotspot ? "#f97316" : fillColor;
     
     // HTML string interpolation for Leaflet
     const htmlString = `
       <div 
         class="relative flex h-5 w-5 items-center justify-center rounded-full transition-transform duration-300 ${isHovered ? "scale-125" : "scale-100"}"
-        style="background-color: ${fillColor}; box-shadow: ${isHovered ? `0 0 15px ${fillColor}` : "none"}"
+        style="background-color: ${displayColor}; box-shadow: ${isHovered ? `0 0 15px ${displayColor}` : "none"}"
       >
         <button
           type="button"
           class="${classes}"
-          style="background-color: ${fillColor}"
+          style="background-color: ${displayColor}"
           aria-label="${junction.name}"
         ></button>
       </div>
@@ -95,7 +104,7 @@ export function JunctionMarker({ junction }: JunctionMarkerProps) {
       iconAnchor: [10, 10],
       popupAnchor: [0, -10]
     });
-  }, [fillColor, isCritical, isSelected, isSimulated, junction.name, isHovered]);
+  }, [fillColor, isCritical, isSelected, isSimulated, isHotspot, junction.name, isHovered]);
 
   const handleMouseEnter = useCallback(() => {
     cancelHide();

@@ -13,11 +13,14 @@ from ..schemas.prediction import (
     EscalationResponse,
     SimulationNoInterventionRequest,
     SimulationNoInterventionResponse,
+    CrowdMovementRequest,
+    CrowdMovementResponse,
 )
 from ..services.predictor import predictor_service
 from ..services.recommendation_engine import get_recommendations
 from ..services.collision_detector import get_active_events_from_db, detect_collisions, CollisionFlag
 from ..services.no_intervention_simulator import simulate_no_intervention
+from ..services.crowd_movement import predict_secondary_hotspots
 
 router = APIRouter()
 
@@ -46,6 +49,30 @@ def simulate_inaction(request: SimulationNoInterventionRequest) -> SimulationNoI
         )
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.post("/ml/crowd-movement", response_model=CrowdMovementResponse)
+@router.post("/api/ml/crowd-movement", response_model=CrowdMovementResponse)
+def get_crowd_movement(request: CrowdMovementRequest) -> CrowdMovementResponse:
+    """
+    Predict secondary traffic hotspots affected by crowd movement spillover.
+    """
+    try:
+        from datetime import datetime
+        dt = datetime.fromisoformat(request.start_datetime.replace("Z", "+00:00"))
+        hour = dt.hour
+        is_peak = (8 <= hour < 11) or (17 <= hour < 21)
+        
+        hotspots = predict_secondary_hotspots(
+            event_lat=request.latitude,
+            event_lng=request.longitude,
+            event_type=request.event_type,
+            is_peak_hour=is_peak
+        )
+        return CrowdMovementResponse(hotspots=hotspots)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 
 
