@@ -3,7 +3,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from .junction import JunctionResponse
-from .incident import IncidentResponse
+from .incident import IncidentResponse, IncidentCreateRequest
 from .junction_summary import JunctionSummaryResponse
 from .junction_health import JunctionHealthResponse
 from .zone import ZoneStatusResponse
@@ -21,6 +21,7 @@ __all__ = [
     "HealthResponse", 
     "JunctionResponse", 
     "IncidentResponse", 
+    "IncidentCreateRequest",
     "JunctionSummaryResponse", 
     "JunctionHealthResponse", 
     "ZoneStatusResponse",

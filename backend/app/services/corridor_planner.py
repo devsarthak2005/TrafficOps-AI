@@ -6,7 +6,7 @@ import requests
 from typing import Any
 
 from ..db import get_cursor
-from ..config import OSRM_BASE_URL
+from ..config import OSRM_BASE_URL, OSRM_PUBLIC_FALLBACK_URL
 from .hospitals import get_hospital_by_id
 from .resource_engine import recommend_resources
 
@@ -56,33 +56,45 @@ def plan_corridor(hospital_id: str, incident_junction_id: str) -> dict[str, Any]
     geometry = None
 
     # 3. Call OSRM API
-    # Public demo server is rate-limited and not suitable for production.
-    # Production deployments should point OSRM_BASE_URL to a self-hosted OSRM instance.
-    url = f"{OSRM_BASE_URL.rstrip('/')}/route/v1/driving/{h_lng},{h_lat};{j_lng},{j_lat}"
     params = {
         "overview": "full",
         "geometries": "geojson"
     }
 
+    # 1. Try local OSRM URL
+    url = f"{OSRM_BASE_URL.rstrip('/')}/route/v1/driving/{h_lng},{h_lat};{j_lng},{j_lat}"
     try:
-        response = requests.get(url, params=params, timeout=4.0)
+        response = requests.get(url, params=params, timeout=2.0)
         if response.status_code == 200:
             data = response.json()
             routes = data.get("routes", [])
             if routes:
                 route = routes[0]
                 geometry = route.get("geometry")
-                # duration is in seconds, convert to minutes
                 duration_minutes = round(route.get("duration", 0) / 60.0)
             else:
-                logger.warning("OSRM returned 200 but no routes found. Using fallback.")
                 is_approximate = True
         else:
-            logger.warning(f"OSRM returned status {response.status_code}. Using fallback.")
             is_approximate = True
     except Exception as e:
-        logger.error(f"OSRM connection failed: {e}. Using straight-line fallback.")
+        logger.warning(f"Local OSRM connection failed: {e}. Trying public fallback.")
         is_approximate = True
+
+    # 2. Try public fallback OSRM URL
+    if is_approximate:
+        url_fallback = f"{OSRM_PUBLIC_FALLBACK_URL.rstrip('/')}/route/v1/driving/{h_lng},{h_lat};{j_lng},{j_lat}"
+        try:
+            response = requests.get(url_fallback, params=params, timeout=4.0)
+            if response.status_code == 200:
+                data = response.json()
+                routes = data.get("routes", [])
+                if routes:
+                    route = routes[0]
+                    geometry = route.get("geometry")
+                    duration_minutes = round(route.get("duration", 0) / 60.0)
+                    is_approximate = False
+        except Exception as e:
+            logger.error(f"Public OSRM connection failed: {e}. Using straight-line fallback.")
 
     # 4. Fallback straight-line routing if OSRM failed/timed out
     if is_approximate or not geometry:

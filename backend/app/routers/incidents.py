@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Query
 
 from ..db import get_cursor
-from ..schemas import IncidentResponse
+from ..schemas import IncidentResponse, IncidentCreateRequest
 
 router = APIRouter()
 
@@ -89,4 +89,45 @@ def get_incident(id: str) -> IncidentResponse:
         temperature_c=row["temperature_c"],
         description=row["description"],
     )
+
+
+@router.post("/incidents", response_model=IncidentResponse)
+@router.post("/api/incidents", response_model=IncidentResponse)
+def create_incident(request: IncidentCreateRequest) -> IncidentResponse:
+    """Create and ingest a new incident into SQLite database."""
+    import uuid
+    from datetime import datetime, timezone
+    
+    inc_id = f"inc_{uuid.uuid4().hex[:8]}"
+    now_str = datetime.now(timezone.utc).isoformat()
+    
+    with get_cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO incidents (id, junction_id, incident_type, severity, timestamp, weather, temperature_c, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                inc_id,
+                request.junction_id,
+                request.incident_type,
+                request.severity,
+                now_str,
+                request.weather,
+                request.temperature_c,
+                request.description
+            )
+        )
+        
+    return IncidentResponse(
+        id=inc_id,
+        junction_id=request.junction_id,
+        incident_type=request.incident_type,
+        severity=request.severity,
+        timestamp=now_str,
+        weather=request.weather,
+        temperature_c=request.temperature_c,
+        description=request.description
+    )
+
 

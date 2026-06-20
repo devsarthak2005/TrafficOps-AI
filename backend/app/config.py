@@ -15,5 +15,20 @@ CSV_PATH = RAW_DATA_DIR / "incidents.csv"
 # Load environment variables
 load_dotenv(dotenv_path=BASE_DIR / ".env")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-OSRM_BASE_URL = os.getenv("OSRM_BASE_URL", "https://routing.openstreetmap.de/routed-car")
+OSRM_BASE_URL = os.getenv("OSRM_BASE_URL", "http://localhost:5000")
+OSRM_PUBLIC_FALLBACK_URL = "https://routing.openstreetmap.de/routed-car"
+
+
+JUNCTION_CLASSIFICATIONS = {
+    "silk-board": {"class": "highway", "multiplier": 1.3},
+    "hebbal-flyover": {"class": "highway", "multiplier": 1.3},
+    "kr-puram": {"class": "highway", "multiplier": 1.3},
+    "tin-factory": {"class": "highway", "multiplier": 1.3},
+    "marathahalli-bridge": {"class": "arterial", "multiplier": 1.0},
+    "old-madras-road": {"class": "arterial", "multiplier": 1.0},
+    "mg-road": {"class": "arterial", "multiplier": 1.0},
+    "bellandur": {"class": "collector", "multiplier": 0.8},
+    "jp-nagar": {"class": "collector", "multiplier": 0.8},
+}
+
 

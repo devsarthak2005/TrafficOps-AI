@@ -11,11 +11,18 @@ from xgboost import XGBClassifier
 from sklearn.metrics import roc_auc_score, recall_score, precision_score, classification_report, confusion_matrix
 from sklearn.cluster import KMeans
 from sklearn.base import BaseEstimator, TransformerMixin
-from features import EscalationFeatureExtractor
+# Add backend directory to sys.path if running as script
+current_dir = os.path.dirname(os.path.abspath(__file__))
+backend_dir = os.path.abspath(os.path.join(current_dir, "..", ".."))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
+
+from ml.pipeline.features import EscalationFeatureExtractor
 
 def main():
     print("Loading events data...")
-    df = pd.read_csv("c:/Users/samik/OneDrive/Desktop/TrafficOps-AI/backend/ml/dataset/events.csv")
+    dataset_path = os.path.abspath(os.path.join(current_dir, "..", "dataset", "events.csv"))
+    df = pd.read_csv(dataset_path)
     
     # Clean datetime fields
     df['start_datetime'] = pd.to_datetime(df['start_datetime'], errors='coerce', utc=True)
@@ -142,7 +149,7 @@ def main():
     print(classification_report(y_test, y_pred))
     
     # Save artifacts
-    models_dir = "c:/Users/samik/OneDrive/Desktop/TrafficOps-AI/backend/models"
+    models_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "models"))
     os.makedirs(models_dir, exist_ok=True)
     
     joblib.dump(model, os.path.join(models_dir, "escalation_model.joblib"))

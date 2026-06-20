@@ -18,14 +18,16 @@ from sklearn.base import BaseEstimator, TransformerMixin
 
 # Add backend directory to sys.path if running as script
 current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.append(current_dir)
+backend_dir = os.path.abspath(os.path.join(current_dir, "..", ".."))
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
 
-from features import LeakageFreeFeatureExtractor
+from ml.pipeline.features import LeakageFreeFeatureExtractor
 
 def main():
     print("Loading data...")
-    df = pd.read_csv("c:/Users/samik/OneDrive/Desktop/TrafficOps-AI/backend/ml/dataset/events.csv")
+    dataset_path = os.path.abspath(os.path.join(current_dir, "..", "dataset", "events.csv"))
+    df = pd.read_csv(dataset_path)
     
     # 1. Clean categories
     df["event_cause"] = df["event_cause"].fillna("others").str.lower().str.strip()
@@ -145,7 +147,7 @@ def main():
     print(np.array(results[best_name]['cm']))
     
     # Save artifacts
-    models_dir_path = "c:/Users/samik/OneDrive/Desktop/TrafficOps-AI/backend/models"
+    models_dir_path = os.path.abspath(os.path.join(current_dir, "..", "..", "models"))
     os.makedirs(models_dir_path, exist_ok=True)
     
     joblib.dump(best_model, os.path.join(models_dir_path, "severity_model.joblib"))

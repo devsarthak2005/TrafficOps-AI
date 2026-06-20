@@ -35,7 +35,7 @@ scenarios = [
             "event_severity": "High",
             "event_attendance": 3500
         },
-        "expected_routes": 2
+        "expected_routes": 3
     },
     {
         "name": "Critical Impact Scenario",
@@ -46,7 +46,7 @@ scenarios = [
             "event_severity": "Critical",
             "event_attendance": 8000
         },
-        "expected_routes": 3
+        "expected_routes": 4
     }
 ]
 

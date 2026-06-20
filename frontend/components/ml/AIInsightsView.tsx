@@ -129,22 +129,55 @@ export function AIInsightsView() {
           </div>
         </div>
 
-        {/* Local Contributions (Shapley Reasons) */}
+        {/* Local Contributions (Shapley Reasons Diverging Bar Chart) */}
         <div className="flex flex-col gap-3 py-1">
-          <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Explainability Factors (Logit Contributions)</h4>
-          <div className="flex flex-col gap-2.5">
+          <div className="flex justify-between items-center">
+            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Explainability Factors (Logit Contributions)</h4>
+            <div className="flex gap-4 text-[9px] text-slate-500 font-mono">
+              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Reduces Risk</span>
+              <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full bg-blue-500" /> Increases Risk</span>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3">
             {reasons.map((r, i) => {
-              const match = r.match(/^(.*?) contributed \+(\d+)%$/);
-              if (!match) return null;
-              const [, label, pct] = match;
-              return (
-                <div key={i} className="flex flex-col gap-1">
-                  <div className="flex justify-between text-xs text-slate-300">
-                    <span className="text-xs">{label}</span>
-                    <span className="font-semibold text-blue-400">+{pct}%</span>
+              const match = r.match(/^(.*?)\s+contributed\s+([+-]?)(\d+)%$/i);
+              if (!match) {
+                return (
+                  <div key={i} className="text-slate-400 text-[11px] font-mono pl-2 border-l border-white/10">
+                    * {r}
                   </div>
-                  <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500/50 rounded-full" style={{ width: `${pct}%` }} />
+                );
+              }
+              const label = match[1].trim();
+              const sign = match[2] === "-" ? "-" : "+";
+              const pct = parseInt(match[3], 10);
+              const isPositive = sign === "+";
+              const barWidth = Math.min(50, pct / 2);
+
+              return (
+                <div key={i} className="flex flex-col gap-1 w-full">
+                  <div className="flex justify-between text-xs text-slate-300">
+                    <span className="text-[11px] truncate max-w-[75%]">{label}</span>
+                    <span className={`font-semibold font-mono ${isPositive ? "text-blue-400" : "text-emerald-400"}`}>
+                      {sign}{pct}%
+                    </span>
+                  </div>
+                  <div className="relative h-4 w-full bg-white/5 rounded overflow-hidden flex items-center">
+                    {/* Centered zero-axis line */}
+                    <div className="absolute left-1/2 top-0 bottom-0 w-0.5 border-l border-dashed border-white/20 z-10" />
+                    
+                    {/* The bar */}
+                    <div 
+                      className={`absolute h-full rounded-sm transition-all duration-300 ${
+                        isPositive 
+                          ? "bg-gradient-to-r from-blue-600/50 to-blue-500/80 shadow-[0_0_8px_rgba(59,130,246,0.25)]" 
+                          : "bg-gradient-to-r from-emerald-600/50 to-emerald-500/80 shadow-[0_0_8px_rgba(16,185,129,0.25)]"
+                      }`}
+                      style={{
+                        width: `${barWidth}%`,
+                        left: isPositive ? "50%" : `calc(50% - ${barWidth}%)`
+                      }}
+                    />
                   </div>
                 </div>
               );

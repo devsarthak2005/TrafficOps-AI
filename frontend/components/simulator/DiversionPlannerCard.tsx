@@ -215,6 +215,16 @@ export function DiversionPlannerCard() {
                     </div>
                   </div>
                 </div>
+
+                {/* Traffic Split */}
+                {route.traffic_split_pct !== undefined && route.traffic_split_pct !== null && (
+                  <div className="flex items-center justify-between border-t border-white/5 pt-1.5 text-[9px]">
+                    <span className="text-slate-500 font-medium">Load Balance split:</span>
+                    <span className="font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded font-mono">
+                      {route.traffic_split_pct}% diverted flow
+                    </span>
+                  </div>
+                )}
               </button>
             );
           })}

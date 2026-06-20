@@ -25,3 +25,23 @@ export async function getIncident(id: string): Promise<Incident> {
   return apiFetch<Incident>(`/incidents/${id}`);
 }
 
+export interface CreateIncidentPayload {
+  junction_id: string;
+  incident_type: string;
+  severity: string;
+  description?: string;
+  weather?: string;
+  temperature_c?: number;
+}
+
+export async function createIncident(
+  payload: CreateIncidentPayload
+): Promise<Incident> {
+  return apiFetch<Incident>("/incidents", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+

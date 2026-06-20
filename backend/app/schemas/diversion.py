@@ -22,6 +22,7 @@ class RouteMetric(BaseModel):
     congestion_score: int          # 0-100
     route_score: int               # 0-100 (overall index, higher is better)
     recommended: bool              # true for the best diversion path
+    traffic_split_pct: int | None = None # percentage of traffic split
 
 
 class DiversionResponse(BaseModel):

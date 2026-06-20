@@ -4,6 +4,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.pipeline import Pipeline
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.cluster import KMeans
 
 class TemporalFeatureExtractor(BaseEstimator, TransformerMixin):
     """Extracts hour and day of week from start_datetime and creates cyclical features."""

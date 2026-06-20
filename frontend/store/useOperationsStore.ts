@@ -34,6 +34,7 @@ interface OperationsState {
     nearby_hospitals: number;
     junction_criticality: number;
     zone: string;
+    junction_id?: string;
   }) => Promise<DeploymentPlan>;
   resetPlan: () => void;
 }

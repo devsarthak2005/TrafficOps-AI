@@ -1,0 +1,20 @@
+[
+    {
+        "severity": {
+            "current_f1": 1.0,
+            "new_f1": 0.9990700630394452,
+            "promoted": false
+        },
+        "recovery_time": {
+            "current_mae": 5449.461317513248,
+            "new_mae": 5449.461317513248,
+            "promoted": false
+        },
+        "escalation": {
+            "current_auc": 0.821821493863483,
+            "new_auc": 0.821821493863483,
+            "promoted": false
+        },
+        "timestamp": "2026-06-20T21:21:52.199020"
+    }
+]

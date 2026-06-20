@@ -12,6 +12,7 @@ class OptimizationRequest(BaseModel):
     nearby_hospitals: int           # number of nearby hospitals
     junction_criticality: float     # 0.0 to 100.0
     zone: str                       # e.g., 'Central', 'East', 'North', 'South'
+    junction_id: str | None = None  # optional junction ID
 
 
 class OptimizationResponse(BaseModel):

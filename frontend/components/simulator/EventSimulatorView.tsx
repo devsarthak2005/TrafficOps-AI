@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSimulationStore } from "@/store/useSimulationStore";
 import { useMapStore } from "@/store/useMapStore";
 import { useMLStore } from "@/store/useMLStore";
 import { useOperationsStore } from "@/store/useOperationsStore";
 import { useDiversionStore } from "@/store/useDiversionStore";
+import { useAlertStore } from "@/store/useAlertStore";
 import { MLPredictionPanel } from "./MLPredictionPanel";
 import { NoInterventionTimeline } from "./NoInterventionTimeline";
-import { Play, Sparkles, AlertTriangle, ArrowRight, ShieldCheck, CheckSquare, Calendar } from "lucide-react";
+import { Play, Sparkles, AlertTriangle, ArrowRight, ShieldCheck, CheckSquare, Calendar, Activity, Zap } from "lucide-react";
+import { createIncident } from "@/lib/api/incidents";
 
 const EVENT_OPTIONS = [
   { value: "festival", label: "Festival" },
@@ -36,6 +38,11 @@ export function EventSimulatorView() {
   const generateDiversions = useDiversionStore((state) => state.generateDiversions);
   const clearDiversions = useDiversionStore((state) => state.clearDiversions);
 
+  const plan = useOperationsStore((state) => state.plan);
+  const noInterventionData = useMLStore((state) => state.noInterventionData);
+  const fetchHealthSummary = useMapStore((state) => state.fetchHealthSummary);
+  const fetchAlerts = useAlertStore((state) => state.fetchAlerts);
+
   const [eventType, setEventType] = useState<string>("festival");
   const [targetType, setTargetType] = useState<"zone" | "junction">("zone");
   const [targetId, setTargetId] = useState<string>(ZONE_OPTIONS[0]);
@@ -55,6 +62,79 @@ export function EventSimulatorView() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeRightTab, setActiveRightTab] = useState<"predictive" | "inaction">("predictive");
+
+  // Ticker auto-play state
+  const [isAutoPlaying, setIsAutoPlaying] = useState<boolean>(false);
+
+  // Ticker effect
+  useEffect(() => {
+    if (!isAutoPlaying) return;
+
+    const descriptions: Record<string, string[]> = {
+      accident: [
+        "Multi-vehicle collision near intersection",
+        "Minor fender bender blocking left lane",
+        "Rear-end collision causing slowdown"
+      ],
+      breakdown: [
+        "Stalled transit bus in center lane",
+        "Broken down delivery truck blocking traffic",
+        "Stalled SUV near flyover entrance"
+      ],
+      construction: [
+        "Emergency utility repairs ongoing",
+        "Road repaving blocking single lane",
+        "Lane closure for flyover maintenance"
+      ],
+      water_logging: [
+        "Waterlogging from heavy monsoon shower",
+        "Subway flooding blocking all movement",
+        "Severe water accumulation on service road"
+      ],
+      congestion: [
+        "Heavy commuter rush hour volume",
+        "Slow-moving traffic bottlenecks",
+        "Peak traffic surge blocking intersection"
+      ],
+    };
+
+    const runTicker = async () => {
+      if (junctions.length === 0) return;
+      
+      const randomJunction = junctions[Math.floor(Math.random() * junctions.length)];
+      const types = ["accident", "breakdown", "construction", "water_logging", "congestion"];
+      const randomType = types[Math.floor(Math.random() * types.length)];
+      const severities = ["low", "moderate", "high", "critical"];
+      const randomSeverity = severities[Math.floor(Math.random() * severities.length)];
+      
+      const descList = descriptions[randomType] || ["Simulated traffic incident"];
+      const randomDesc = descList[Math.floor(Math.random() * descList.length)];
+      
+      try {
+        await createIncident({
+          junction_id: randomJunction.id,
+          incident_type: randomType,
+          severity: randomSeverity,
+          description: randomDesc,
+        });
+        
+        await Promise.all([
+          fetchAlerts(),
+          fetchHealthSummary()
+        ]);
+      } catch (err) {
+        console.error("Failed to inject ticker incident:", err);
+      }
+    };
+
+    runTicker();
+
+    const tickerInterval = setInterval(() => {
+      runTicker();
+    }, 15000);
+
+    return () => clearInterval(tickerInterval);
+  }, [isAutoPlaying, junctions, fetchAlerts, fetchHealthSummary]);
 
   const handleTargetTypeChange = (newType: "junction" | "zone") => {
     setTargetType(newType);
@@ -131,19 +211,7 @@ export function EventSimulatorView() {
         resolvedZone = zoneMap[targetId] || "Central";
       }
 
-      // 4. Trigger Resource Allocation Optimization automatically!
-      const optPlan = await optimizeAllocation({
-        impact_level: predRes.predicted_impact,
-        confidence: predRes.confidence,
-        event_type: mlPayload.event_type,
-        event_duration: Number(eventDuration),
-        event_attendance: Number(eventAttendance),
-        nearby_hospitals: Number(nearbyHospitals),
-        junction_criticality: Number(junctionCriticality),
-        zone: resolvedZone,
-      });
-
-      // 5. Trigger Diversion Route Planner automatically!
+      // 4. Calculate diversion location for routing and allocation
       const zoneToJuncMap: Record<string, string> = {
         North: "hebbal-flyover",
         East: "kr-puram",
@@ -155,6 +223,20 @@ export function EventSimulatorView() {
         ? targetId
         : (zoneToJuncMap[targetId] || "silk-board");
 
+      // 5. Trigger Resource Allocation Optimization automatically!
+      const optPlan = await optimizeAllocation({
+        impact_level: predRes.predicted_impact,
+        confidence: predRes.confidence,
+        event_type: mlPayload.event_type,
+        event_duration: Number(eventDuration),
+        event_attendance: Number(eventAttendance),
+        nearby_hospitals: Number(nearbyHospitals),
+        junction_criticality: Number(junctionCriticality),
+        zone: resolvedZone,
+        junction_id: diversionLocation,
+      });
+
+      // 6. Trigger Diversion Route Planner automatically!
       await generateDiversions({
         event_location: diversionLocation,
         predicted_impact_level: predRes.predicted_impact,
@@ -379,6 +461,30 @@ export function EventSimulatorView() {
               {isSubmitting ? "Processing..." : "Inject Simulated Event"}
             </button>
           </div>
+
+          {/* Ticker Auto-Play Feed Panel */}
+          <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col gap-3 shadow-lg mt-4">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider border-b border-white/10 pb-2 flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                <Activity className="h-3.5 w-3.5 text-emerald-500 animate-pulse" /> Live Incident Simulator Feed
+              </span>
+              <span className={`h-2 w-2 rounded-full ${isAutoPlaying ? "bg-emerald-500 animate-ping" : "bg-slate-600"}`} />
+            </h3>
+            <p className="text-[10px] text-slate-400 leading-relaxed">
+              Enable the automated feed to simulate real-time traffic incidents arriving on a 15-second loop. This will inject live data, recalculate ML congestion models, and automatically generate commands and notifications.
+            </p>
+            <button
+              type="button"
+              onClick={() => setIsAutoPlaying(prev => !prev)}
+              className={`w-full rounded-md py-2 text-xs font-bold transition flex items-center justify-center gap-1.5 ${
+                isAutoPlaying 
+                  ? "bg-emerald-600 text-white hover:bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.2)]" 
+                  : "bg-slate-800 text-slate-300 hover:bg-slate-700"
+              }`}
+            >
+              {isAutoPlaying ? "Pause Incident Feed" : "Activate Incident Feed"}
+            </button>
+          </div>
         </div>
 
         {/* Right Tabbed Panel */}
@@ -411,6 +517,43 @@ export function EventSimulatorView() {
           <div className="flex-1 min-h-0">
             {activeRightTab === "predictive" ? <MLPredictionPanel /> : <NoInterventionTimeline />}
           </div>
+
+          {/* Measurable Impact Summary Card */}
+          {plan && noInterventionData && (
+            <div className="rounded-xl border border-blue-500/25 bg-blue-500/10 p-4 flex flex-col gap-2 shadow-[0_0_15px_rgba(59,130,246,0.1)] shrink-0 border-l-4 border-l-blue-500 mt-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-blue-400 flex items-center gap-1.5 animate-pulse">
+                  <Zap className="h-3.5 w-3.5 text-blue-400" /> Measurable Impact Summary
+                </span>
+                <span className="text-[9px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full font-black">
+                  ROI: +{Math.round(((noInterventionData.total_economic_loss_inr - plan.estimated_operational_cost) / plan.estimated_operational_cost) * 100)}%
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-4 mt-1 border-t border-blue-500/10 pt-2 text-xs">
+                <div className="flex flex-col">
+                  <span className="text-[9px] text-slate-400 font-medium">Cost of Inaction</span>
+                  <span className="font-black text-red-400 text-sm mt-0.5">
+                    ₹{new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(noInterventionData.total_economic_loss_inr)}
+                  </span>
+                </div>
+                <div className="flex flex-col border-l border-white/5 pl-4">
+                  <span className="text-[9px] text-slate-400 font-medium">Deployment Cost</span>
+                  <span className="font-black text-amber-400 text-sm mt-0.5">
+                    ₹{new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(plan.estimated_operational_cost)}
+                  </span>
+                </div>
+                <div className="flex flex-col border-l border-white/5 pl-4">
+                  <span className="text-[9px] text-slate-400 font-medium">Net Savings (Saved Waste)</span>
+                  <span className="font-black text-emerald-400 text-sm mt-0.5">
+                    ₹{new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(noInterventionData.total_economic_loss_inr - plan.estimated_operational_cost)}
+                  </span>
+                </div>
+              </div>
+              <p className="text-[9px] text-slate-500 leading-normal mt-1 italic">
+                By investing ₹{new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(plan.estimated_operational_cost)} in proactive resource deployment, the command center prevents a projected economic loss of ₹{new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(noInterventionData.total_economic_loss_inr)}.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

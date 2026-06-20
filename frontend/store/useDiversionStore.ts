@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 export interface RouteMetric {
-  id: "primary" | "secondary" | "emergency";
+  id: "primary" | "secondary" | "tertiary" | "emergency";
   name: string;
   path: [number, number][];
   distance: string;
@@ -9,6 +9,7 @@ export interface RouteMetric {
   congestion_score: number;
   route_score: number;
   recommended: boolean;
+  traffic_split_pct?: number;
 }
 
 export interface DiversionPlan {
@@ -20,7 +21,7 @@ export interface DiversionPlan {
 
 interface DiversionState {
   plan: DiversionPlan | null;
-  selectedRouteId: "primary" | "secondary" | "emergency" | null;
+  selectedRouteId: "primary" | "secondary" | "tertiary" | "emergency" | null;
   isGenerating: boolean;
   error: string | null;
   generateDiversions: (payload: {
@@ -30,7 +31,7 @@ interface DiversionState {
     event_severity: string;
     event_attendance: number;
   }) => Promise<DiversionPlan>;
-  setSelectedRouteId: (id: "primary" | "secondary" | "emergency" | null) => void;
+  setSelectedRouteId: (id: "primary" | "secondary" | "tertiary" | "emergency" | null) => void;
   clearDiversions: () => void;
 }
 

@@ -44,13 +44,6 @@ class PredictorService:
         if backend_dir not in sys.path:
             sys.path.insert(0, backend_dir)
 
-        # Workaround for unpickling EscalationFeatureExtractor when run under uvicorn
-        try:
-            from ml.pipeline.features import EscalationFeatureExtractor
-            sys.modules['__main__'].EscalationFeatureExtractor = EscalationFeatureExtractor
-        except Exception as e:
-            logger.error(f"Failed to apply unpickling workaround: {e}")
-
         models_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "models"))
         
         # 1. Load Severity Classifier

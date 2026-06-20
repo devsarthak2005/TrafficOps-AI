@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Dict, Any
 from ..schemas.operations import OptimizationRequest, OptimizationResponse
+from ..config import JUNCTION_CLASSIFICATIONS
 
 
 def optimize_resource_allocation(req: OptimizationRequest) -> OptimizationResponse:
@@ -112,6 +113,19 @@ def optimize_resource_allocation(req: OptimizationRequest) -> OptimizationRespon
         response_time = max(3, base_time - 3)
     else:
         response_time = max(4, base_time)
+    
+    # Scale by road classification multiplier
+    multiplier = 1.0
+    if req.junction_id:
+        junc_key = req.junction_id.lower().strip()
+        if junc_key in JUNCTION_CLASSIFICATIONS:
+            multiplier = JUNCTION_CLASSIFICATIONS[junc_key]["multiplier"]
+    
+    response_time = int(round(response_time * multiplier))
+    if emergency_corridor_required:
+        response_time = max(3, response_time)
+    else:
+        response_time = max(4, response_time)
     
     estimated_response_time = f"{response_time} minutes"
 

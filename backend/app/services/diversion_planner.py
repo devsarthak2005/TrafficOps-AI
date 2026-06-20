@@ -6,7 +6,7 @@ import requests
 from typing import List, Dict, Any, Tuple
 
 from ..db import get_cursor
-from ..config import OSRM_BASE_URL
+from ..config import OSRM_BASE_URL, OSRM_PUBLIC_FALLBACK_URL, JUNCTION_CLASSIFICATIONS
 from ..schemas.diversion import DiversionRequest, DiversionResponse, RouteMetric
 
 logger = logging.getLogger(__name__)
@@ -45,14 +45,15 @@ def _query_osrm_route(coords: List[Tuple[float, float]]) -> Tuple[List[List[floa
     """
     # coords should be list of (lat, lng)
     formatted_coords = ";".join([f"{lng},{lat}" for lat, lng in coords])
-    url = f"{OSRM_BASE_URL.rstrip('/')}/route/v1/driving/{formatted_coords}"
     params = {
         "overview": "full",
         "geometries": "geojson"
     }
 
+    # 1. Try local OSRM URL
+    url = f"{OSRM_BASE_URL.rstrip('/')}/route/v1/driving/{formatted_coords}"
     try:
-        response = requests.get(url, params=params, timeout=4.0)
+        response = requests.get(url, params=params, timeout=2.0)
         if response.status_code == 200:
             data = response.json()
             routes = data.get("routes", [])
@@ -64,7 +65,24 @@ def _query_osrm_route(coords: List[Tuple[float, float]]) -> Tuple[List[List[floa
                 duration_min = route.get("duration", 0) / 60.0
                 return path_coords, distance_km, duration_min, False
     except Exception as e:
-        logger.error(f"OSRM query failed: {e}")
+        logger.warning(f"Local OSRM query failed: {e}. Trying public fallback.")
+
+    # 2. Try public fallback OSRM URL
+    url_fallback = f"{OSRM_PUBLIC_FALLBACK_URL.rstrip('/')}/route/v1/driving/{formatted_coords}"
+    try:
+        response = requests.get(url_fallback, params=params, timeout=4.0)
+        if response.status_code == 200:
+            data = response.json()
+            routes = data.get("routes", [])
+            if routes:
+                route = routes[0]
+                geometry = route.get("geometry")
+                path_coords = [[pt[1], pt[0]] for pt in geometry.get("coordinates", [])]
+                distance_km = route.get("distance", 0) / 1000.0
+                duration_min = route.get("duration", 0) / 60.0
+                return path_coords, distance_km, duration_min, False
+    except Exception as e:
+        logger.error(f"Public OSRM query failed: {e}. Using straight-line fallback.")
 
     # Fallback straight-line coordinates
     path_coords = [[lat, lng] for lat, lng in coords]
@@ -97,6 +115,12 @@ def plan_diversion_routes(req: DiversionRequest) -> DiversionResponse:
 
     # 1. Fetch Coordinates for Origin, Destination, and Event location
     start_id, end_id = _get_start_end_junctions(req.event_location)
+    
+    # Look up junction multiplier
+    multiplier = 1.0
+    junc_key = req.event_location.lower().strip()
+    if junc_key in JUNCTION_CLASSIFICATIONS:
+        multiplier = JUNCTION_CLASSIFICATIONS[junc_key]["multiplier"]
     
     with get_cursor() as cur:
         # Fetch start junction
@@ -138,7 +162,7 @@ def plan_diversion_routes(req: DiversionRequest) -> DiversionResponse:
     # High deployment score mitigates the travel time delay
     deployment_time_mitigation = (deployment_score / 400.0)
     adjusted_multiplier = max(1.1, time_multiplier - deployment_time_mitigation)
-    p_travel_time = max(1, int(round(p_dur * adjusted_multiplier)))
+    p_travel_time = max(1, int(round(p_dur * adjusted_multiplier * multiplier)))
     
     # Congestion score influenced by impact level, severity, mitigated by deployment score
     base_p_congestion = 85 if impact == "critical" else 65 if impact == "high" else 45
@@ -184,14 +208,40 @@ def plan_diversion_routes(req: DiversionRequest) -> DiversionResponse:
             route_score=s_route_score,
             recommended=False
         ))
+    # C. Tertiary Route (alternative bypass route detouring around event)
+    if impact in ("high", "critical"):
+        t_detour_coords = (ev_lat - 0.010, ev_lng - 0.010)
+        t_path, t_dist, t_dur, _ = _query_osrm_route([start_coords, t_detour_coords, end_coords])
+        
+        # Bypasses event, standard timing applies
+        t_adjusted_mult = max(1.1, 1.15 - (deployment_score / 1000.0))
+        t_travel_time = max(1, int(round(t_dur * t_adjusted_mult)))
+        
+        base_t_congestion = 28
+        t_severity_mod = 10 if severity in ("high", "critical") else 0
+        t_deployment_mitigation = int(deployment_score * 0.12)
+        t_congestion = max(5, min(100, base_t_congestion + t_severity_mod - t_deployment_mitigation))
+        
+        t_route_score = max(5, 100 - t_congestion - int(t_dist * 1.5))
+        
+        routes_list.append(RouteMetric(
+            id="tertiary",
+            name="Tertiary Route (Alt Detour)",
+            path=t_path,
+            distance=f"{t_dist:.1f} km",
+            travel_time=f"{t_travel_time} min",
+            congestion_score=t_congestion,
+            route_score=t_route_score,
+            recommended=False
+        ))
 
-    # C. Emergency Route (fastest direct cleared lane route)
+    # D. Emergency Route (fastest direct cleared lane route)
     if impact == "critical":
         em_path, em_dist, em_dur, _ = _query_osrm_route([start_coords, event_coords, end_coords])
         
         # Cleared lane -> divided duration representing fast speed
         em_adjusted_div = 1.5 + (deployment_score / 200.0)
-        em_travel_time = max(1, int(round(em_dur / em_adjusted_div)))
+        em_travel_time = max(1, int(round((em_dur / em_adjusted_div) * multiplier)))
         
         base_em_congestion = 10
         em_severity_mod = 5 if severity == "critical" else 0
@@ -212,6 +262,22 @@ def plan_diversion_routes(req: DiversionRequest) -> DiversionResponse:
             recommended=False
         ))
 
+    # Calculate traffic splits if multiple detours exist
+    # General traffic detours are secondary and tertiary
+    detours = [r for r in routes_list if r.id in ("secondary", "tertiary")]
+    if len(detours) >= 2:
+        total_score = sum(r.route_score for r in detours)
+        if total_score > 0:
+            for r in detours:
+                r.traffic_split_pct = int(round((r.route_score / total_score) * 100))
+            # Adjust to sum exactly to 100% due to rounding
+            total_split = sum(r.traffic_split_pct for r in detours)
+            if total_split != 100 and len(detours) > 0:
+                detours[0].traffic_split_pct += (100 - total_split)
+    elif len(detours) == 1:
+        # Keep single-best-route response as fallback if only one viable detour exists
+        detours[0].traffic_split_pct = 100
+
     # 3. Identify and set the single Recommended Route (highest route score, excluding emergency route for general traffic)
     if routes_list:
         recommendable_routes = [r for r in routes_list if r.id != "emergency"]
@@ -226,7 +292,7 @@ def plan_diversion_routes(req: DiversionRequest) -> DiversionResponse:
     base_pct = 0.25 if impact == "medium" else 0.45 if impact == "high" else 0.65
     severity_mult = 1.3 if severity == "critical" else 1.15 if severity == "high" else 1.0
     deployment_mult = 0.6 + (deployment_score / 250.0)
-    vehicles_diverted = int(req.event_attendance * base_pct * severity_mult * deployment_mult)
+    vehicles_diverted = int(req.event_attendance * base_pct * severity_mult * deployment_mult * multiplier)
     vehicles_diverted = min(req.event_attendance, max(0, vehicles_diverted))
 
     base_delay_val = 15 if impact == "medium" else 28 if impact == "high" else 42
