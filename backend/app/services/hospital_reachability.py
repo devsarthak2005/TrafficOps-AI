@@ -7,67 +7,93 @@ from .hospitals import get_all_hospitals, get_hospital_by_id, Hospital
 from ..db import get_cursor
 from .health_score import compute_health_score
 
-def _get_all_junctions() -> list[dict[str, Any]]:
+def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate the great-circle distance between two points in kilometers."""
+    R = 6371.0  # Earth's radius in km
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (math.sin(dlat / 2) ** 2 + 
+         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2)
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
+def get_hospital_access_junctions(
+    hospital: Hospital, 
+    n: int = 2, 
+    include_simulated: bool = False, 
+    now=None
+) -> list[dict[str, Any]]:
+    """Return the nearest n access junctions for a hospital, sorted by adjusted travel time."""
     with get_cursor() as cur:
         cur.execute("SELECT id, name, lat, lng FROM junctions")
         rows = cur.fetchall()
-    return [dict(row) for row in rows]
-
-def _distance(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
-    # Simplification: straight-line distance instead of road-network
-    return math.sqrt((lat1 - lat2)**2 + (lng1 - lng2)**2)
-
-def get_hospital_access_junctions(hospital: Hospital, n: int = 2) -> list[dict[str, Any]]:
-    """Return the nearest n access junctions for a hospital."""
-    junctions = _get_all_junctions()
-    sorted_junctions = sorted(
-        junctions,
-        key=lambda j: _distance(hospital["lat"], hospital["lng"], j["lat"], j["lng"])
-    )
+    junctions = [dict(row) for row in rows]
+    
+    junctions_with_time = []
+    for j in junctions:
+        dist_km = haversine_distance(hospital["lat"], hospital["lng"], j["lat"], j["lng"])
+        
+        # Pull junction risk category
+        health = compute_health_score(j["id"], include_simulated=include_simulated, now=now)
+        risk_cat = health["risk_category"]
+        
+        # Congestion-aware speed mapping (watchlist or critical -> 15 km/h, else 30 km/h)
+        speed = 15.0 if risk_cat in ("watchlist", "critical") else 30.0
+        
+        # Travel time in minutes
+        travel_time_min = (dist_km / speed) * 60.0
+        
+        j_copy = dict(j)
+        j_copy["distance_km"] = dist_km
+        j_copy["travel_time_min"] = travel_time_min
+        j_copy["effective_health_score"] = health["health_score"]
+        j_copy["risk_category"] = risk_cat
+        
+        junctions_with_time.append(j_copy)
+        
+    # Sort junctions by travel time ascending
+    sorted_junctions = sorted(junctions_with_time, key=lambda x: x["travel_time_min"])
     return sorted_junctions[:n]
 
-def get_band(score: int) -> str:
-    if score >= 95:
-        return "safe"
-    elif score >= 75:
-        return "watchlist"
-    elif score >= 50:
-        return "at_risk"
-    else:
-        return "critical"
-
-def compute_hospital_accessibility(hospital_id: str, include_simulated: bool = False, now=None) -> dict[str, Any]:
+def compute_hospital_accessibility(
+    hospital_id: str, 
+    include_simulated: bool = False, 
+    now=None
+) -> dict[str, Any]:
     hospital = get_hospital_by_id(hospital_id)
     if not hospital:
         raise ValueError(f"Hospital not found: {hospital_id}")
 
-    access_junctions = get_hospital_access_junctions(hospital, n=2)
+    # Re-rank and extract nearest n junctions by travel time
+    access_junctions = get_hospital_access_junctions(hospital, n=2, include_simulated=include_simulated, now=now)
     
-    penalties = []
-    access_junctions_detail = []
+    # Calculate average travel time
+    avg_travel_time = sum(j["travel_time_min"] for j in access_junctions) / len(access_junctions) if access_junctions else 0.0
     
-    for j in access_junctions:
-        health = compute_health_score(j["id"], include_simulated=include_simulated, now=now)
-        effective_score = health["health_score"]
-        penalty = 100 - effective_score
-        penalties.append(penalty)
+    # Update Safe / At Risk thresholds using adjusted travel time
+    if avg_travel_time <= 3.0:
+        band = "safe"
+    elif avg_travel_time <= 7.0:
+        band = "watchlist"
+    elif avg_travel_time <= 12.0:
+        band = "at_risk"
+    else:
+        band = "critical"
         
+    # Translate travel time into an accessibility score (0 to 100)
+    accessibility_score = max(0, min(100, int(round(100 - (avg_travel_time / 15.0) * 100))))
+    
+    access_junctions_detail = []
+    for j in access_junctions:
+        # Calculate contribution to penalty (100 - health)
+        penalty = 100 - j["effective_health_score"]
         access_junctions_detail.append({
             "junction_id": j["id"],
             "junction_name": j["name"],
-            "effective_health_score": effective_score,
-            "raw_penalty": penalty
+            "effective_health_score": j["effective_health_score"],
+            "contribution_to_penalty": int(round(penalty / len(access_junctions))) if access_junctions else 0
         })
-
-    N = len(access_junctions)
-    avg_penalty = sum(penalties) / N if N > 0 else 0
-    accessibility_score = max(0, min(100, int(round(100 - avg_penalty))))
-    band = get_band(accessibility_score)
-
-    for detail in access_junctions_detail:
-        detail["contribution_to_penalty"] = int(round(detail["raw_penalty"] / N))
-        del detail["raw_penalty"]
-
+        
     return {
         "hospital_id": hospital["id"],
         "hospital_name": hospital["name"],
@@ -92,3 +118,4 @@ def get_all_hospitals_status(include_simulated: bool = False, now=None) -> list[
             "accessibility_band": status["accessibility_band"]
         })
     return statuses
+
