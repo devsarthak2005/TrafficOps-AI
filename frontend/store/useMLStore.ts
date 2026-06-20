@@ -26,6 +26,28 @@ export interface FeatureImportance {
   importance: number;
 }
 
+export interface NoInterventionStep {
+  time_minutes: number;
+  time_label: string;
+  risk_score: number;
+  congestion_class: string;
+  fuel_loss_liters: number;
+  economic_loss_inr: number;
+  hospital_accessibility_score: number;
+  emergency_delay_minutes: number;
+}
+
+export interface NoInterventionData {
+  junction_id: string;
+  junction_name: string;
+  vehicles_affected_estimate: number;
+  timeline: NoInterventionStep[];
+  total_fuel_loss_liters: number;
+  total_economic_loss_inr: number;
+  max_emergency_delay_minutes: number;
+  assumptions: Record<string, number | string>;
+}
+
 interface MLState {
   prediction: MLPrediction | null;
   briefing: CopilotBriefing | null;
@@ -33,6 +55,8 @@ interface MLState {
   predictionHistory: MLPrediction[];
   isPredicting: boolean;
   isGeneratingBriefing: boolean;
+  noInterventionData: NoInterventionData | null;
+  isSimulatingNoIntervention: boolean;
   predictImpact: (payload: {
     event_cause: string;
     event_type: "planned" | "unplanned";
@@ -71,6 +95,7 @@ interface MLState {
       start_time: string;
     };
   }) => Promise<CopilotBriefing>;
+  simulateNoIntervention: (junctionId: string, currentRiskScore: number) => Promise<NoInterventionData>;
   resetPrediction: () => void;
 }
 
@@ -81,6 +106,8 @@ export const useMLStore = create<MLState>((set, get) => ({
   predictionHistory: [],
   isPredicting: false,
   isGeneratingBriefing: false,
+  noInterventionData: null,
+  isSimulatingNoIntervention: false,
 
   predictImpact: async (payload) => {
     set({ isPredicting: true });
@@ -157,5 +184,34 @@ export const useMLStore = create<MLState>((set, get) => ({
     }
   },
 
-  resetPrediction: () => set({ prediction: null, briefing: null }),
+  simulateNoIntervention: async (junctionId, currentRiskScore) => {
+    set({ isSimulatingNoIntervention: true });
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+      const response = await fetch(`${baseUrl}/ml/simulate-no-intervention`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          junction_id: junctionId,
+          current_risk_score: currentRiskScore,
+          duration_hours: 4
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("No-intervention simulation failed");
+      }
+
+      const data: NoInterventionData = await response.json();
+      set({ noInterventionData: data, isSimulatingNoIntervention: false });
+      return data;
+    } catch (err) {
+      console.error("No intervention simulation request error:", err);
+      set({ isSimulatingNoIntervention: false });
+      throw err;
+    }
+  },
+
+  resetPrediction: () => set({ prediction: null, briefing: null, noInterventionData: null }),
 }));
+

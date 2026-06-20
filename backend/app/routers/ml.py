@@ -11,10 +11,13 @@ from ..schemas.prediction import (
     RecoveryTimeResponse,
     EscalationRequest,
     EscalationResponse,
+    SimulationNoInterventionRequest,
+    SimulationNoInterventionResponse,
 )
 from ..services.predictor import predictor_service
 from ..services.recommendation_engine import get_recommendations
 from ..services.collision_detector import get_active_events_from_db, detect_collisions, CollisionFlag
+from ..services.no_intervention_simulator import simulate_no_intervention
 
 router = APIRouter()
 
@@ -27,6 +30,23 @@ def get_active_collisions() -> list[CollisionFlag]:
     """
     events = get_active_events_from_db(hours=24.0)
     return detect_collisions(events)
+
+
+@router.post("/ml/simulate-no-intervention", response_model=SimulationNoInterventionResponse)
+@router.post("/api/ml/simulate-no-intervention", response_model=SimulationNoInterventionResponse)
+def simulate_inaction(request: SimulationNoInterventionRequest) -> SimulationNoInterventionResponse:
+    """
+    Simulates the cascading costs and delays of not intervening in a traffic incident.
+    """
+    try:
+        return simulate_no_intervention(
+            junction_id=request.junction_id,
+            current_risk_score=request.current_risk_score,
+            duration_hours=request.duration_hours
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
 
 
 

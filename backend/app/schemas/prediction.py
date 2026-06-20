@@ -90,3 +90,32 @@ class EscalationResponse(BaseModel):
     will_escalate: bool
     probability: float
     confidence: float
+
+
+class SimulationNoInterventionRequest(BaseModel):
+    junction_id: str
+    current_risk_score: float
+    duration_hours: int = 4
+
+
+class TimelineStep(BaseModel):
+    time_minutes: int
+    time_label: str
+    risk_score: float
+    congestion_class: str
+    fuel_loss_liters: float
+    economic_loss_inr: float
+    hospital_accessibility_score: int
+    emergency_delay_minutes: float
+
+
+class SimulationNoInterventionResponse(BaseModel):
+    junction_id: str
+    junction_name: str
+    vehicles_affected_estimate: int
+    timeline: list[TimelineStep]
+    total_fuel_loss_liters: float
+    total_economic_loss_inr: float
+    max_emergency_delay_minutes: float
+    assumptions: dict[str, float | str]
+

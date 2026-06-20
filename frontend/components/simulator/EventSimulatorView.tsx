@@ -7,6 +7,7 @@ import { useMLStore } from "@/store/useMLStore";
 import { useOperationsStore } from "@/store/useOperationsStore";
 import { useDiversionStore } from "@/store/useDiversionStore";
 import { MLPredictionPanel } from "./MLPredictionPanel";
+import { NoInterventionTimeline } from "./NoInterventionTimeline";
 import { Play, Sparkles, AlertTriangle, ArrowRight, ShieldCheck, CheckSquare, Calendar } from "lucide-react";
 
 const EVENT_OPTIONS = [
@@ -26,6 +27,7 @@ export function EventSimulatorView() {
   const junctions = useMapStore((state) => state.junctions);
   const isSimulating = useSimulationStore((state) => state.isSimulating);
   const predictImpact = useMLStore((state) => state.predictImpact);
+  const simulateNoIntervention = useMLStore((state) => state.simulateNoIntervention);
   const prediction = useMLStore((state) => state.prediction);
   const optimizeAllocation = useOperationsStore((state) => state.optimizeAllocation);
   const generateDiversions = useDiversionStore((state) => state.generateDiversions);
@@ -49,6 +51,7 @@ export function EventSimulatorView() {
   const [junctionCriticality, setJunctionCriticality] = useState<number>(70);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activeRightTab, setActiveRightTab] = useState<"predictive" | "inaction">("predictive");
 
   const handleTargetTypeChange = (newType: "junction" | "zone") => {
     setTargetType(newType);
@@ -155,6 +158,17 @@ export function EventSimulatorView() {
         event_severity: intensity.charAt(0).toUpperCase() + intensity.slice(1),
         event_attendance: Number(eventAttendance),
       });
+
+      // 6. Trigger Do Nothing / No Intervention Simulator automatically!
+      const riskScoreMap: Record<string, number> = {
+        Low: 25.0,
+        Medium: 50.0,
+        High: 75.0,
+        Critical: 90.0,
+      };
+      const currentRisk = riskScoreMap[predRes.predicted_impact] || 50.0;
+      await simulateNoIntervention(diversionLocation, currentRisk);
+
     } catch (err) {
       console.error(err);
     } finally {
@@ -351,11 +365,39 @@ export function EventSimulatorView() {
           </div>
         </div>
 
-        {/* Right Prediction Panel */}
-        <div className="col-span-7 flex flex-col gap-4 overflow-y-auto pr-1">
-          <MLPredictionPanel />
+        {/* Right Tabbed Panel */}
+        <div className="col-span-7 flex flex-col gap-3 h-full overflow-hidden">
+          {/* Tabs header */}
+          <div className="flex gap-2 bg-white/5 border border-white/10 rounded-lg p-1 shrink-0">
+            <button
+              onClick={() => setActiveRightTab("predictive")}
+              className={`flex-1 rounded-md py-1.5 text-center text-xs font-bold transition-all ${
+                activeRightTab === "predictive"
+                  ? "bg-blue-600 text-white shadow-md"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              Predictive Analytics
+            </button>
+            <button
+              onClick={() => setActiveRightTab("inaction")}
+              className={`flex-1 rounded-md py-1.5 text-center text-xs font-bold transition-all ${
+                activeRightTab === "inaction"
+                  ? "bg-red-950/40 text-red-400 border border-red-500/20 shadow-md"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              Cost of Inaction
+            </button>
+          </div>
+
+          {/* Tab content panel */}
+          <div className="flex-1 min-h-0">
+            {activeRightTab === "predictive" ? <MLPredictionPanel /> : <NoInterventionTimeline />}
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
