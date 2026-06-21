@@ -5,7 +5,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 BACKEND_NAME = "trafficops-backend"
-DEFAULT_ALLOWED_ORIGINS = ("http://localhost:3000",)
+DEFAULT_ALLOWED_ORIGINS = ("http://localhost:3000", "https://traffic-ops-ai-seven.vercel.app")
 BASE_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = BASE_DIR / "data"
 DATABASE_PATH = DATA_DIR / "trafficops.db"
