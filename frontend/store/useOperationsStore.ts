@@ -35,6 +35,8 @@ interface OperationsState {
     junction_criticality: number;
     zone: string;
     junction_id?: string;
+    escalation_risk_prob?: number;
+    recovery_time_mins?: number;
   }) => Promise<DeploymentPlan>;
   resetPlan: () => void;
 }
