@@ -7,9 +7,10 @@ import { useMLStore } from "@/store/useMLStore";
 import { useOperationsStore } from "@/store/useOperationsStore";
 import { useDiversionStore } from "@/store/useDiversionStore";
 import { useAlertStore } from "@/store/useAlertStore";
+import { useCorridorStore } from "@/store/useCorridorStore";
 import { MLPredictionPanel } from "./MLPredictionPanel";
 import { NoInterventionTimeline } from "./NoInterventionTimeline";
-import { Play, Sparkles, AlertTriangle, ArrowRight, ShieldCheck, CheckSquare, Calendar, Activity, Zap } from "lucide-react";
+import { Play, Sparkles, AlertTriangle, ArrowRight, ShieldCheck, CheckSquare, Calendar, Activity, Zap, RefreshCw } from "lucide-react";
 import { createIncident } from "@/lib/api/incidents";
 
 const EVENT_OPTIONS = [
@@ -26,17 +27,21 @@ const ZONE_OPTIONS = ["North", "East", "Central", "South"];
 
 export function EventSimulatorView() {
   const startSimulation = useSimulationStore((state) => state.startSimulation);
+  const stopSimulation = useSimulationStore((state) => state.stopSimulation);
   const activeSimulations = useSimulationStore((state) => state.activeSimulations);
   const junctions = useMapStore((state) => state.junctions);
   const isSimulating = useSimulationStore((state) => state.isSimulating);
   const predictImpact = useMLStore((state) => state.predictImpact);
+  const resetPrediction = useMLStore((state) => state.resetPrediction);
   const simulateNoIntervention = useMLStore((state) => state.simulateNoIntervention);
   const fetchSecondaryHotspots = useMLStore((state) => state.fetchSecondaryHotspots);
   const clearSecondaryHotspots = useMLStore((state) => state.clearSecondaryHotspots);
   const prediction = useMLStore((state) => state.prediction);
   const optimizeAllocation = useOperationsStore((state) => state.optimizeAllocation);
+  const resetPlan = useOperationsStore((state) => state.resetPlan);
   const generateDiversions = useDiversionStore((state) => state.generateDiversions);
   const clearDiversions = useDiversionStore((state) => state.clearDiversions);
+  const clearPlan = useCorridorStore((state) => state.clearPlan);
 
   const plan = useOperationsStore((state) => state.plan);
   const noInterventionData = useMLStore((state) => state.noInterventionData);
@@ -223,6 +228,45 @@ export function EventSimulatorView() {
         ? targetId
         : (zoneToJuncMap[targetId] || "silk-board");
 
+      // Trigger recovery time predictor and escalation risk predictor in parallel
+      const [recoveryRes, escalationRes] = await Promise.all([
+        useMLStore.getState().predictRecoveryTime({
+          event_cause: mlPayload.event_cause as any,
+          event_type: mlPayload.event_type,
+          priority: mlPayload.priority,
+          requires_road_closure: mlPayload.requires_road_closure,
+          latitude: lat,
+          longitude: lng,
+          zone: resolvedZone,
+          corridor: "main_corridor",
+          junction: diversionLocation,
+          start_datetime: mlPayload.start_datetime
+        }),
+        useMLStore.getState().predictEscalationRisk({
+          event_cause: mlPayload.event_cause as any,
+          event_type: mlPayload.event_type,
+          priority: mlPayload.priority,
+          requires_road_closure: mlPayload.requires_road_closure,
+          latitude: lat,
+          longitude: lng,
+          zone: resolvedZone,
+          junction: diversionLocation,
+          start_datetime: mlPayload.start_datetime
+        })
+      ]);
+
+      // Trigger Zone Risk Engine prediction dynamically using predictions
+      await useMLStore.getState().predictZoneRisk({
+        zone: resolvedZone,
+        junction: diversionLocation,
+        event_type: mlPayload.event_type,
+        priority: mlPayload.priority,
+        severity: predRes.predicted_impact,
+        escalation_risk: escalationRes.probability,
+        historical_frequency: 4, // simulation context default
+        recovery_time: recoveryRes.duration_minutes
+      });
+
       // 5. Trigger Resource Allocation Optimization automatically!
       const optPlan = await optimizeAllocation({
         impact_level: predRes.predicted_impact,
@@ -234,7 +278,10 @@ export function EventSimulatorView() {
         junction_criticality: Number(junctionCriticality),
         zone: resolvedZone,
         junction_id: diversionLocation,
+        escalation_risk_prob: escalationRes.probability,
+        recovery_time_mins: recoveryRes.duration_minutes
       });
+
 
       // 6. Trigger Diversion Route Planner automatically!
       await generateDiversions({
@@ -274,16 +321,46 @@ export function EventSimulatorView() {
     }
   };
 
+  const resetAllOperations = async () => {
+    try {
+      if (activeSimulations.length > 0) {
+        for (const sim of activeSimulations) {
+          await stopSimulation(sim.simulation_id);
+        }
+      }
+      resetPrediction();
+      resetPlan();
+      clearDiversions();
+      clearPlan();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   return (
     <div className="flex flex-col gap-4 p-5 h-full overflow-hidden bg-[#080808]">
-      {/* Title */}
-      <div>
-        <h1 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
-          Event Simulation Hub <Sparkles className="h-4 w-4 text-blue-400" />
-        </h1>
-        <p className="text-slate-400 text-[11px] mt-0.5">
-          Proactively simulate scenarios and view AI predictions and recommendations inside a single viewport.
-        </p>
+      {/* Title & Reset Controls */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 bg-slate-950/40 border border-white/5 p-4 rounded-xl shadow-lg">
+        <div>
+          <h1 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+            Event Simulation Hub <Sparkles className="h-4 w-4 text-blue-400" />
+          </h1>
+          <p className="text-slate-400 text-[11px] mt-0.5">
+            Proactively simulate scenarios and view AI predictions and recommendations inside a single viewport.
+          </p>
+        </div>
+        
+        {/* Reset Button */}
+        <div>
+          <button
+            type="button"
+            onClick={resetAllOperations}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-white/10 bg-white/5 text-xs text-slate-300 transition hover:bg-white/10"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            <span>Reset Board</span>
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-12 gap-5 min-h-0 flex-1 overflow-hidden">

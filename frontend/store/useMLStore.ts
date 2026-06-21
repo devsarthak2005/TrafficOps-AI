@@ -55,6 +55,24 @@ export interface NoInterventionData {
   assumptions: Record<string, number | string>;
 }
 
+export interface RecoveryTimeResponseData {
+  duration_minutes: number;
+  model_version: string;
+}
+
+export interface EscalationResponseData {
+  will_escalate: boolean;
+  probability: number;
+  confidence: number;
+}
+
+export interface ZoneRiskResponseData {
+  risk_score: number;
+  risk_level: string;
+  risk_heatmap_color: string;
+  critical_junctions: string[];
+}
+
 interface MLState {
   prediction: MLPrediction | null;
   briefing: CopilotBriefing | null;
@@ -66,6 +84,17 @@ interface MLState {
   isSimulatingNoIntervention: boolean;
   secondaryHotspots: HotspotPrediction[];
   isFetchingHotspots: boolean;
+  
+  // Recovery & Escalation States
+  recoveryPrediction: RecoveryTimeResponseData | null;
+  isPredictingRecovery: boolean;
+  escalationPrediction: EscalationResponseData | null;
+  isPredictingEscalation: boolean;
+
+  // Zone Risk State
+  zoneRisk: ZoneRiskResponseData | null;
+  isPredictingZoneRisk: boolean;
+
   predictImpact: (payload: {
     event_cause: string;
     event_type: "planned" | "unplanned";
@@ -76,6 +105,45 @@ interface MLState {
     start_datetime: string;
   }) => Promise<MLPrediction>;
   fetchImportances: () => Promise<void>;
+  
+  // Recovery & Escalation Actions
+  predictRecoveryTime: (payload: {
+    event_cause: string;
+    event_type: "planned" | "unplanned";
+    priority: string;
+    requires_road_closure: boolean;
+    latitude: number;
+    longitude: number;
+    zone: string;
+    corridor: string;
+    junction: string;
+    start_datetime: string;
+  }) => Promise<RecoveryTimeResponseData>;
+  predictEscalationRisk: (payload: {
+    event_cause: string;
+    event_type: "planned" | "unplanned";
+    priority: string;
+    requires_road_closure: boolean;
+    latitude: number;
+    longitude: number;
+    zone: string;
+    junction: string;
+    start_datetime: string;
+  }) => Promise<EscalationResponseData>;
+
+  // Zone Risk Action
+  predictZoneRisk: (payload: {
+    zone: string;
+    junction: string;
+    event_type: string;
+    priority: string;
+    severity: string;
+    escalation_risk: number;
+    historical_frequency: number;
+    recovery_time: number;
+  }) => Promise<ZoneRiskResponseData>;
+
+
   generateBriefing: (payload: {
     prediction: { impact_level: string; confidence: number };
     feature_contributions: { feature: string; contribution: number }[];
@@ -115,6 +183,7 @@ interface MLState {
   resetPrediction: () => void;
 }
 
+
 export const useMLStore = create<MLState>((set, get) => ({
   prediction: null,
   briefing: null,
@@ -126,8 +195,15 @@ export const useMLStore = create<MLState>((set, get) => ({
   isSimulatingNoIntervention: false,
   secondaryHotspots: [],
   isFetchingHotspots: false,
+  recoveryPrediction: null,
+  isPredictingRecovery: false,
+  escalationPrediction: null,
+  isPredictingEscalation: false,
+  zoneRisk: null,
+  isPredictingZoneRisk: false,
 
   predictImpact: async (payload) => {
+
     set({ isPredicting: true });
     try {
       const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -163,6 +239,68 @@ export const useMLStore = create<MLState>((set, get) => ({
       throw err;
     }
   },
+
+  predictRecoveryTime: async (payload) => {
+    set({ isPredictingRecovery: true });
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+      const response = await fetch(`${baseUrl}/ml/recovery-time`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error("Recovery time prediction failed");
+      const data = await response.json();
+      set({ recoveryPrediction: data, isPredictingRecovery: false });
+      return data;
+    } catch (err) {
+      console.error("Predict recovery time error:", err);
+      set({ isPredictingRecovery: false });
+      throw err;
+    }
+  },
+
+  predictEscalationRisk: async (payload) => {
+    set({ isPredictingEscalation: true });
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+      const response = await fetch(`${baseUrl}/ml/escalation-risk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error("Escalation risk prediction failed");
+      const data = await response.json();
+      set({ escalationPrediction: data, isPredictingEscalation: false });
+      return data;
+    } catch (err) {
+      console.error("Predict escalation risk error:", err);
+      set({ isPredictingEscalation: false });
+      throw err;
+    }
+  },
+
+  predictZoneRisk: async (payload) => {
+    set({ isPredictingZoneRisk: true });
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+      const response = await fetch(`${baseUrl}/ml/zone-risk`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) throw new Error("Zone risk prediction failed");
+      const data = await response.json();
+      set({ zoneRisk: data, isPredictingZoneRisk: false });
+      return data;
+    } catch (err) {
+      console.error("Predict zone risk error:", err);
+      set({ isPredictingZoneRisk: false });
+      throw err;
+    }
+  },
+
+
 
   fetchImportances: async () => {
     try {
@@ -254,6 +392,16 @@ export const useMLStore = create<MLState>((set, get) => ({
 
   clearSecondaryHotspots: () => set({ secondaryHotspots: [] }),
 
-  resetPrediction: () => set({ prediction: null, briefing: null, noInterventionData: null, secondaryHotspots: [] }),
+  resetPrediction: () => set({ 
+    prediction: null, 
+    briefing: null, 
+    noInterventionData: null, 
+    secondaryHotspots: [],
+    recoveryPrediction: null,
+    escalationPrediction: null,
+    zoneRisk: null
+  }),
+
 }));
+
 

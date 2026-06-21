@@ -18,6 +18,7 @@ _ACTIVE_SIMULATIONS: dict[str, dict] = {}
 EVENT_SEVERITY_BOOST: dict[str, dict[str, int]] = {
     "festival":        {"low": 10, "medium": 20, "high": 35},
     "political_rally": {"low": 15, "medium": 25, "high": 40},
+    "sports_event":    {"low": 10, "medium": 20, "high": 35},
     "accident":        {"low": 15, "medium": 30, "high": 50},
     "breakdown":       {"low":  5, "medium": 15, "high": 25},
     "construction":    {"low": 10, "medium": 20, "high": 30},

@@ -17,7 +17,8 @@ export function AIInsightsView() {
     fetchImportances,
     briefing,
     isGeneratingBriefing,
-    generateBriefing
+    generateBriefing,
+    zoneRisk
   } = useMLStore();
 
   const operationsPlan = useOperationsStore((state) => state.plan);
@@ -109,7 +110,7 @@ export function AIInsightsView() {
       Medium: { text: "text-amber-400", bg: "bg-amber-500/10", border: "border-amber-500/20", ring: "stroke-amber-500" },
       High: { text: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/20", ring: "stroke-orange-500" },
       Critical: { text: "text-red-400 bg-red-500/10 border-red-500/20", bg: "bg-red-500/10", border: "border-red-500/20 animate-pulse", ring: "stroke-red-500" },
-    }[predicted_impact];
+    }[predicted_impact] || { text: "text-slate-400", bg: "bg-slate-500/10", border: "border-slate-500/20", ring: "stroke-slate-500" };
 
     return (
       <div className="rounded-xl border border-white/5 bg-panel p-5 flex flex-col gap-4 shadow-lg">
@@ -128,6 +129,27 @@ export function AIInsightsView() {
             </span>
           </div>
         </div>
+
+        {/* Dynamic Zone Risk Engine Metrics Panel */}
+        {zoneRisk && (
+          <div className="bg-black/40 border border-white/5 p-3 rounded-lg flex flex-col gap-1.5">
+            <span className="text-[9px] font-bold uppercase tracking-wider text-slate-500 font-mono">Dynamic Zone Risk Output</span>
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-slate-300">Calculated Zone Risk Score:</span>
+              <span className="text-sm font-black font-mono" style={{ color: zoneRisk.risk_heatmap_color }}>
+                {zoneRisk.risk_score} / 100 ({zoneRisk.risk_level})
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1 mt-1">
+              <span className="text-[9px] text-slate-500 font-mono">Critical Junctions in Zone:</span>
+              {zoneRisk.critical_junctions.map((j) => (
+                <span key={j} className="px-1.5 py-0.5 rounded bg-white/5 border border-white/5 text-[9px] text-slate-400 capitalize">
+                  {j.replace("-", " ")}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Local Contributions (Shapley Reasons Diverging Bar Chart) */}
         <div className="flex flex-col gap-3 py-1">
@@ -348,4 +370,5 @@ export function AIInsightsView() {
     </div>
   );
 }
+
 export default AIInsightsView;

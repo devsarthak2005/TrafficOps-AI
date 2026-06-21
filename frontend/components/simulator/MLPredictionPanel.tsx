@@ -5,7 +5,7 @@ import { useMLStore } from "@/store/useMLStore";
 import { Shield, ShieldAlert, CheckCircle, Info, HelpCircle } from "lucide-react";
 
 export function MLPredictionPanel() {
-  const { prediction, isPredicting, secondaryHotspots } = useMLStore();
+  const { prediction, isPredicting, secondaryHotspots, recoveryPrediction, escalationPrediction } = useMLStore();
 
   if (isPredicting) {
     return (
@@ -70,6 +70,35 @@ export function MLPredictionPanel() {
         </div>
       </div>
 
+      {/* Regression & Escalation ML Insights Block */}
+      <div className="grid grid-cols-2 gap-3.5 bg-black/40 border border-white/5 p-3 rounded-lg">
+        <div className="flex flex-col">
+          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">ML Recovery Estimate</span>
+          {recoveryPrediction ? (
+            <span className="text-lg font-black text-blue-400 mt-1">
+              {recoveryPrediction.duration_minutes} <span className="text-xs font-medium text-slate-400">mins</span>
+            </span>
+          ) : (
+            <span className="text-xs text-slate-500 mt-1">Calculating...</span>
+          )}
+        </div>
+        <div className="flex flex-col border-l border-white/5 pl-3.5">
+          <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400">ML Escalation Risk</span>
+          {escalationPrediction ? (
+            <div className="flex flex-col mt-1">
+              <span className={`text-base font-black ${escalationPrediction.will_escalate ? "text-red-400" : "text-emerald-400"}`}>
+                {escalationPrediction.will_escalate ? "High Risk" : "Low Risk"}
+              </span>
+              <span className="text-[9px] text-slate-500 font-mono">
+                Prob: {(escalationPrediction.probability * 100).toFixed(1)}%
+              </span>
+            </div>
+          ) : (
+            <span className="text-xs text-slate-500 mt-1">Calculating...</span>
+          )}
+        </div>
+      </div>
+
       {/* Recommendations */}
       <div className="border-t border-white/10 pt-3 flex flex-col gap-2">
         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -86,6 +115,7 @@ export function MLPredictionPanel() {
       </div>
 
       {/* Secondary Hotspots Spillover */}
+
       {secondaryHotspots && secondaryHotspots.length > 0 && (
         <div className="border-t border-white/10 pt-3.5 flex flex-col gap-2">
           <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">

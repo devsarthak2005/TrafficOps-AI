@@ -1,8 +1,7 @@
-from __future__ import annotations
-
 import os
 import sys
 import logging
+import threading
 from typing import Dict, Any, List
 from fastapi import HTTPException
 
@@ -10,28 +9,52 @@ logger = logging.getLogger(__name__)
 
 
 class PredictorService:
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls, *args, **kwargs):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super(PredictorService, cls).__new__(cls, *args, **kwargs)
+                cls._instance._initialized = False
+            return cls._instance
+
     def __init__(self):
-        self.preprocessor = None
-        self.model = None
-        self.feature_names = None
-        self.is_loaded = False
-        self.load_error = None
-        
-        self.recovery_preprocessor = None
-        self.recovery_model = None
-        self.is_loaded_recovery = False
-        self.load_error_recovery = None
-        
-        self.escalation_preprocessor = None
-        self.escalation_model = None
-        self.escalation_freq_map = {}
-        self.is_loaded_escalation = False
-        self.load_error_escalation = None
-        
-        self._load_models()
+        with self._lock:
+            if getattr(self, "_initialized", False):
+                return
+            self.preprocessor = None
+            self.model = None
+            self.feature_names = None
+            self.is_loaded = False
+            self.load_error = None
+            
+            self.recovery_preprocessor = None
+            self.recovery_model = None
+            self.is_loaded_recovery = False
+            self.load_error_recovery = None
+            
+            self.escalation_preprocessor = None
+            self.escalation_model = None
+            self.escalation_freq_map = {}
+            self.is_loaded_escalation = False
+            self.load_error_escalation = None
+
+            # Thread-safe caching for predictions
+            self._prediction_cache = {}
+            self._recovery_cache = {}
+            self._escalation_cache = {}
+            
+            self._load_models()
+            self._initialized = True
 
     def _load_models(self):
         """Lazily load the preprocessors and models from backend/models/."""
+        # Clear prediction caches on reload/load
+        self._prediction_cache.clear()
+        self._recovery_cache.clear()
+        self._escalation_cache.clear()
+
         current_dir = os.path.dirname(os.path.abspath(__file__))
         
         # Ensure ml/pipeline is in sys.path to unpickle LeakageFreeFeatureExtractor
@@ -120,6 +143,18 @@ class PredictorService:
         if not self.is_loaded:
             logger.error("Prediction failed: ML severity predictor is not loaded.")
             raise HTTPException(status_code=503, detail="Prediction model unavailable")
+
+        cache_key = (
+            request_data.get('event_cause', 'Unknown'),
+            request_data.get('event_type', 'unplanned'),
+            request_data.get('priority', 'Unknown'),
+            bool(request_data.get('requires_road_closure', False)),
+            float(request_data.get('latitude', 12.9716)),
+            float(request_data.get('longitude', 77.5946)),
+            str(request_data.get('start_datetime', ''))
+        )
+        if cache_key in self._prediction_cache:
+            return self._prediction_cache[cache_key]
 
         import pandas as pd
         import numpy as np
@@ -291,12 +326,14 @@ class PredictorService:
 
             explanation_text = "\n".join(explanation_lines)
 
-            return {
+            res = {
                 "predicted_impact": predicted_impact,
                 "confidence": float(round(confidence * 100, 1)),
                 "reasons": reasons_formatted,
                 "explanation": explanation_text
             }
+            self._prediction_cache[cache_key] = res
+            return res
 
         except Exception as e:
             logger.exception("Error during prediction processing.")
@@ -311,6 +348,18 @@ class PredictorService:
             logger.error("Prediction failed: ML recovery time predictor is not loaded.")
             raise HTTPException(status_code=503, detail="Prediction model unavailable")
 
+        cache_key = (
+            request_data.get('event_cause', ''),
+            request_data.get('event_type', ''),
+            request_data.get('priority', ''),
+            bool(request_data.get('requires_road_closure', False)),
+            float(request_data.get('latitude', 0.0)),
+            float(request_data.get('longitude', 0.0)),
+            str(request_data.get('start_datetime', ''))
+        )
+        if cache_key in self._recovery_cache:
+            return self._recovery_cache[cache_key]
+
         import pandas as pd
 
         # Prepare raw inputs into a DataFrame
@@ -319,8 +368,8 @@ class PredictorService:
             'event_type': request_data.get('event_type'),
             'priority': request_data.get('priority'),
             'requires_road_closure': bool(request_data.get('requires_road_closure')),
-            'latitude': float(request_data.get('latitude')),
-            'longitude': float(request_data.get('longitude')),
+            'latitude': float(request_data.get('latitude', 0.0)),
+            'longitude': float(request_data.get('longitude', 0.0)),
             'start_datetime': pd.to_datetime(request_data.get('start_datetime'))
         }])
 
@@ -328,7 +377,9 @@ class PredictorService:
             # Transform and predict
             X_trans = self.recovery_preprocessor.transform(input_df)
             pred = self.recovery_model.predict(X_trans)[0]
-            return max(0, int(round(float(pred))))
+            val = max(0, int(round(float(pred))))
+            self._recovery_cache[cache_key] = val
+            return val
         except Exception as e:
             logger.exception("Error during recovery time prediction.")
             raise HTTPException(status_code=503, detail="Prediction model unavailable")
@@ -341,6 +392,17 @@ class PredictorService:
         if not self.is_loaded_escalation:
             logger.error("Prediction failed: ML escalation predictor is not loaded.")
             raise HTTPException(status_code=503, detail="Prediction model unavailable")
+
+        cache_key = (
+            request_data.get('event_cause', 'others'),
+            request_data.get('priority', 'Low'),
+            bool(request_data.get('requires_road_closure', False)),
+            request_data.get('junction', 'Unknown'),
+            request_data.get('zone', 'Unknown'),
+            str(request_data.get('start_datetime', ''))
+        )
+        if cache_key in self._escalation_cache:
+            return self._escalation_cache[cache_key]
 
         import pandas as pd
 
@@ -367,11 +429,13 @@ class PredictorService:
             probs = self.escalation_model.predict_proba(X_trans)[0]
             pred = int(self.escalation_model.predict(X_trans)[0])
             
-            return {
+            val = {
                 "will_escalate": bool(pred == 1),
                 "probability": float(probs[1]),
                 "confidence": float(probs[pred])
             }
+            self._escalation_cache[cache_key] = val
+            return val
         except Exception as e:
             logger.exception("Error during escalation prediction.")
             raise HTTPException(status_code=503, detail="Prediction model unavailable")

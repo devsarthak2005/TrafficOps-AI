@@ -147,6 +147,45 @@ export function DashboardView() {
         start_datetime: new Date().toISOString()
       });
 
+      // Trigger recovery and escalation predictions in parallel
+      const [recoveryRes, escalationRes] = await Promise.all([
+        useMLStore.getState().predictRecoveryTime({
+          event_cause: eventCause as any,
+          event_type: scenario === "rally" || scenario === "sports" ? "planned" : "unplanned",
+          priority: priority,
+          requires_road_closure: roadClosure,
+          latitude: lat,
+          longitude: lng,
+          zone: "South",
+          corridor: "main_corridor",
+          junction: targetId,
+          start_datetime: new Date().toISOString()
+        }),
+        useMLStore.getState().predictEscalationRisk({
+          event_cause: eventCause as any,
+          event_type: scenario === "rally" || scenario === "sports" ? "planned" : "unplanned",
+          priority: priority,
+          requires_road_closure: roadClosure,
+          latitude: lat,
+          longitude: lng,
+          zone: "South",
+          junction: targetId,
+          start_datetime: new Date().toISOString()
+        })
+      ]);
+
+      // Trigger Zone Risk Engine
+      await useMLStore.getState().predictZoneRisk({
+        zone: "South",
+        junction: targetId,
+        event_type: scenario === "rally" || scenario === "sports" ? "planned" : "unplanned",
+        priority: priority,
+        severity: predRes.predicted_impact,
+        escalation_risk: escalationRes.probability,
+        historical_frequency: 3,
+        recovery_time: recoveryRes.duration_minutes
+      });
+
       // Step C. Trigger Resource Allocation Optimization
       const optPlan = await optimizeAllocation({
         impact_level: predRes.predicted_impact,
@@ -156,8 +195,12 @@ export function DashboardView() {
         event_attendance: scenario === "rally" ? 12000 : scenario === "sports" ? 25000 : 500,
         nearby_hospitals: 2,
         junction_criticality: 80,
-        zone: "South"
+        zone: "South",
+        junction_id: targetId,
+        escalation_risk_prob: escalationRes.probability,
+        recovery_time_mins: recoveryRes.duration_minutes
       });
+
 
       // Step D. Trigger Diversion Planning
       await generateDiversions({
@@ -249,6 +292,45 @@ export function DashboardView() {
         start_datetime: new Date().toISOString()
       });
 
+      // Trigger recovery and escalation predictions in parallel
+      const [recoveryRes, escalationRes] = await Promise.all([
+        useMLStore.getState().predictRecoveryTime({
+          event_cause: "protest",
+          event_type: "planned",
+          priority: "High",
+          requires_road_closure: true,
+          latitude: 12.9176,
+          longitude: 77.6246,
+          zone: "South",
+          corridor: "main_corridor",
+          junction: "silk-board",
+          start_datetime: new Date().toISOString()
+        }),
+        useMLStore.getState().predictEscalationRisk({
+          event_cause: "protest",
+          event_type: "planned",
+          priority: "High",
+          requires_road_closure: true,
+          latitude: 12.9176,
+          longitude: 77.6246,
+          zone: "South",
+          junction: "silk-board",
+          start_datetime: new Date().toISOString()
+        })
+      ]);
+
+      // Trigger Zone Risk Engine
+      await useMLStore.getState().predictZoneRisk({
+        zone: "South",
+        junction: "silk-board",
+        event_type: "planned",
+        priority: "High",
+        severity: predRes.predicted_impact,
+        escalation_risk: escalationRes.probability,
+        historical_frequency: 4,
+        recovery_time: recoveryRes.duration_minutes
+      });
+
       // Step 3: Resource Optimization
       setCurrentStep(2);
       await new Promise((resolve) => setTimeout(resolve, 800));
@@ -260,8 +342,12 @@ export function DashboardView() {
         event_attendance: 15000,
         nearby_hospitals: 2,
         junction_criticality: 90,
-        zone: "South"
+        zone: "South",
+        junction_id: "silk-board",
+        escalation_risk_prob: escalationRes.probability,
+        recovery_time_mins: recoveryRes.duration_minutes
       });
+
 
       // Step 4: Diversion Planning
       setCurrentStep(3);
@@ -449,12 +535,13 @@ export function DashboardView() {
 
         {/* KPI 5: Emergency Corridors */}
         <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col justify-between shadow-lg">
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">Corridors Active</span>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">Volunteers Recommended</span>
           <h3 className="text-2xl font-black mt-2 text-blue-400 font-mono">
-            {operationsPlan?.emergency_corridor_required ? "Active" : "None"}
+            {operationsPlan ? Math.round(operationsPlan.officers_required * 0.5) : "None"}
           </h3>
-          <span className="text-[9px] text-slate-500 mt-1">Hospital lanes active</span>
+          <span className="text-[9px] text-slate-500 mt-1">ML Operations assistants</span>
         </div>
+
 
         {/* KPI 6: Prediction Accuracy (from learning feedback) */}
         <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col justify-between shadow-lg">

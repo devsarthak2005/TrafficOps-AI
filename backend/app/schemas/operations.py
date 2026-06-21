@@ -13,6 +13,9 @@ class OptimizationRequest(BaseModel):
     junction_criticality: float     # 0.0 to 100.0
     zone: str                       # e.g., 'Central', 'East', 'North', 'South'
     junction_id: str | None = None  # optional junction ID
+    escalation_risk_prob: float = 0.0
+    recovery_time_mins: float = 60.0
+
 
 
 class OptimizationResponse(BaseModel):

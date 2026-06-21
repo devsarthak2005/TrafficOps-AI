@@ -21,8 +21,10 @@ from ..services.recommendation_engine import get_recommendations
 from ..services.collision_detector import get_active_events_from_db, detect_collisions, CollisionFlag
 from ..services.no_intervention_simulator import simulate_no_intervention
 from ..services.crowd_movement import predict_secondary_hotspots
+from ..services.zone_risk_engine import predict_zone_risk, ZoneRiskRequest, ZoneRiskResponse
 
 router = APIRouter()
+
 
 
 @router.get("/ml/collision-detect", response_model=list[CollisionFlag])
@@ -126,3 +128,15 @@ def predict_incident_escalation_risk(request: EscalationRequest) -> EscalationRe
         return EscalationResponse(**res)
     except Exception as e:
         raise HTTPException(status_code=503, detail="Prediction model unavailable")
+
+
+@router.post("/ml/zone-risk", response_model=ZoneRiskResponse)
+def predict_dynamic_zone_risk(request: ZoneRiskRequest) -> ZoneRiskResponse:
+    """
+    Expose dynamic Zone Risk Engine results incorporating ML model predictions.
+    """
+    try:
+        return predict_zone_risk(request)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+

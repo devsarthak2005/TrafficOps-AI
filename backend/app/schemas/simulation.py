@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 class SimulationRequest(BaseModel):
-    event_type: Literal["festival", "political_rally", "accident", "breakdown", "construction", "water_logging"]
+    event_type: Literal["festival", "political_rally", "sports_event", "accident", "breakdown", "construction", "water_logging"]
     target_type: Literal["junction", "zone"]
     target_id: str
     intensity: Literal["low", "medium", "high"]
