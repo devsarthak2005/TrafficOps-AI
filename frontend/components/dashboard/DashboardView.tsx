@@ -38,7 +38,7 @@ const MapPreview = dynamic(
 );
 
 export function DashboardView() {
-  const { healthMap, setActiveTab } = useMapStore();
+  const { healthMap, setActiveTab, dashboardStats, fetchDashboardStats } = useMapStore();
   const { alerts, fetchAlerts } = useAlertStore();
   const { isSimulating, activeSimulations, startSimulation, stopSimulation } = useSimulationStore();
   const { prediction, predictImpact, resetPrediction, briefing, generateBriefing, isGeneratingBriefing } = useMLStore();
@@ -49,12 +49,16 @@ export function DashboardView() {
   const [simRunning, setSimRunning] = useState(false);
   const [currentStep, setCurrentStep] = useState<number | null>(null);
 
-  // Poll alerts on mount
+  // Poll alerts and stats on mount
   useEffect(() => {
     fetchAlerts();
-    const interval = setInterval(() => fetchAlerts(), 5000);
+    fetchDashboardStats();
+    const interval = setInterval(() => {
+      fetchAlerts();
+      fetchDashboardStats();
+    }, 10000);
     return () => clearInterval(interval);
-  }, [fetchAlerts]);
+  }, [fetchAlerts, fetchDashboardStats]);
 
   // Compute stats
   const activeIncidentsCount = useMemo(() => {
@@ -427,7 +431,9 @@ export function DashboardView() {
         <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col justify-between shadow-lg">
           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">Avg Response Time</span>
           <h3 className="text-2xl font-black mt-2 text-slate-200 font-mono">
-            {operationsPlan?.estimated_response_time ?? "12 mins"}
+            {dashboardStats?.avg_response_time_minutes != null
+              ? `${dashboardStats.avg_response_time_minutes} mins`
+              : operationsPlan?.estimated_response_time ?? "-"}
           </h3>
           <span className="text-[9px] text-slate-500 mt-1">Emergency benchmark</span>
         </div>
@@ -450,11 +456,11 @@ export function DashboardView() {
           <span className="text-[9px] text-slate-500 mt-1">Hospital lanes active</span>
         </div>
 
-        {/* KPI 6: Prediction Accuracy */}
+        {/* KPI 6: Prediction Accuracy (from learning feedback) */}
         <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col justify-between shadow-lg">
           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">ML Accuracy</span>
-          <h3 className="text-2xl font-black mt-2 text-emerald-400 font-mono">80.2%</h3>
-          <span className="text-[9px] text-slate-500 mt-1">XGBoost validation</span>
+          <h3 className="text-2xl font-black mt-2 text-emerald-400 font-mono">{dashboardStats?.ml_accuracy_pct ?? "-"}%</h3>
+          <span className="text-[9px] text-slate-500 mt-1">Feedback dataset</span>
         </div>
       </div>
 
@@ -498,61 +504,74 @@ export function DashboardView() {
             </h3>
 
             <div className="grid grid-cols-2 gap-4">
-              {/* Chart 1: Zone Risk Trends */}
+              {/* Chart 1: Zone Risk Levels (from DB health scores) */}
               <div className="bg-slate-950/40 border border-white/5 rounded-lg p-3 flex flex-col gap-2">
                 <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider block">Zone Risk Levels</span>
-                <svg className="w-full h-24 mt-1" viewBox="0 0 100 40">
-                  <path d="M 0,35 Q 25,20 50,28 T 100,5" fill="none" stroke="rgba(239,68,68,0.5)" strokeWidth="1.5" />
-                  <path d="M 0,35 Q 25,30 50,15 T 100,10" fill="none" stroke="rgba(59,130,246,0.5)" strokeWidth="1.5" />
-                  <circle cx="50" cy="28" r="1.5" fill="red" />
-                  <circle cx="100" cy="10" r="1.5" fill="blue" />
-                </svg>
-                <div className="flex justify-between text-[8px] text-slate-500 font-mono mt-1">
-                  <span>South Zone (High)</span>
-                  <span>Central Zone (Low)</span>
+                <div className="flex flex-col gap-1.5 mt-1">
+                  {(dashboardStats?.zone_risk_levels ?? []).map((z, i) => {
+                    const color = z.risk >= 70 ? "bg-red-500/60" : z.risk >= 40 ? "bg-orange-500/50" : "bg-emerald-500/50";
+                    return (
+                      <div key={i} className="flex items-center gap-2 text-[9px]">
+                        <span className="text-slate-400 w-14 font-mono">{z.zone}</span>
+                        <div className="flex-1 h-1.5 bg-white/5 rounded-full overflow-hidden">
+                          <div className={`h-full ${color} rounded-full transition-all duration-500`} style={{ width: `${z.risk}%` }} />
+                        </div>
+                        <span className="font-bold text-slate-300 w-8 text-right font-mono">{z.risk}%</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Chart 2: Resource Allocation Trends */}
+              {/* Chart 2: Resource Utilisation (from resource engine) */}
               <div className="bg-slate-950/40 border border-white/5 rounded-lg p-3 flex flex-col gap-2">
                 <span className="text-[9px] font-mono text-slate-500 uppercase tracking-wider block">Resource Utilisation</span>
                 <div className="flex flex-col gap-2 mt-1.5">
-                  {[
-                    { label: "Officers Deployed", pct: 78, color: "bg-blue-500" },
-                    { label: "Barricades Deployed", pct: 45, color: "bg-orange-500" },
-                    { label: "Patrol Vehicles", pct: 60, color: "bg-purple-500" }
-                  ].map((item, idx) => (
-                    <div key={idx} className="flex flex-col gap-0.5">
-                      <div className="flex justify-between text-[8px] text-slate-400 font-mono">
-                        <span>{item.label}</span>
-                        <span>{item.pct}%</span>
+                  {(dashboardStats?.resource_utilization ?? [
+                    { label: "Officers", pct: 0, desc: "Loading..." },
+                    { label: "Vehicles", pct: 0, desc: "Loading..." },
+                    { label: "Barricades", pct: 0, desc: "Loading..." }
+                  ]).map((item, idx) => {
+                    const colors = ["bg-blue-500", "bg-purple-500", "bg-orange-500"];
+                    return (
+                      <div key={idx} className="flex flex-col gap-0.5">
+                        <div className="flex justify-between text-[8px] text-slate-400 font-mono">
+                          <span>{item.label}</span>
+                          <span>{item.pct}%</span>
+                        </div>
+                        <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                          <div className={`h-full ${colors[idx % 3]}`} style={{ width: `${item.pct}%` }} />
+                        </div>
                       </div>
-                      <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                        <div className={`h-full ${item.color}`} style={{ width: `${item.pct}%` }} />
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* City Intelligence & Hotspots */}
+          {/* City Intelligence & Hotspots (from DB) */}
           <div className="rounded-xl border border-white/5 bg-panel p-4 flex flex-col gap-3 shadow-lg">
             <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider font-mono flex items-center gap-1">
               <Layers className="h-4 w-4 text-blue-400" /> City Intelligence Overview
             </h3>
             <div className="grid grid-cols-2 gap-3 text-xs">
               <div className="p-3 bg-slate-950/30 border border-white/5 rounded-lg">
-                <span className="text-[9px] text-slate-500 font-mono uppercase tracking-wider">High-Risk Zones</span>
-                <p className="text-red-400 font-bold mt-1">South Zone (Critical)</p>
-                <p className="text-[9px] text-slate-500 mt-0.5">Primary bottleneck: Silk Board Junction</p>
+                <span className="text-[9px] text-slate-500 font-mono uppercase tracking-wider">High-Risk Zone</span>
+                <p className="text-red-400 font-bold mt-1">{dashboardStats?.city_intelligence?.highest_risk_zone ?? "-"} Zone ({dashboardStats?.city_intelligence?.highest_risk_zone_pct ?? 0}% risk)</p>
+                <p className="text-[9px] text-slate-500 mt-0.5">Worst junction: {dashboardStats?.city_intelligence?.worst_junction ?? "-"}</p>
+                {!!dashboardStats?.city_intelligence?.active_simulation_hotspots?.length && (
+                  <p className="text-[9px] text-slate-500 mt-0.5">
+                    Active hotspots: {dashboardStats.city_intelligence.active_simulation_hotspots.map((item) => item.zone_name).join(", ")}
+                  </p>
+                )}
               </div>
 
               <div className="p-3 bg-slate-950/30 border border-white/5 rounded-lg">
-                <span className="text-[9px] text-slate-500 font-mono uppercase tracking-wider">Event Hotspots</span>
-                <p className="text-amber-400 font-bold mt-1">Central Zone (Planned)</p>
-                <p className="text-[9px] text-slate-500 mt-0.5">Rally and festival simulations active</p>
+                <span className="text-[9px] text-slate-500 font-mono uppercase tracking-wider">Network Status</span>
+                <p className="text-amber-400 font-bold mt-1">{dashboardStats?.city_intelligence?.total_incidents ?? 0} Total Incidents</p>
+                <p className="text-[9px] text-slate-500 mt-0.5">Avg clearance: {dashboardStats?.avg_clearance_minutes ?? dashboardStats?.avg_response_time_minutes ?? 0} min</p>
+                <p className="text-[9px] text-slate-500 mt-0.5">Active sims: {dashboardStats?.city_intelligence?.active_simulation_count ?? 0}</p>
               </div>
             </div>
           </div>

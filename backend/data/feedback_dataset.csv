@@ -9,3 +9,5 @@ evt_007,Medium,High,68.0,0,0.75,0.3,2.8,South,water_logging
 evt_008,Low,Low,59.0,1,0.92,0.1,0.9,West,breakdown
 evt_009,High,High,84.0,1,0.82,0.4,3.1,Central,festival
 evt_010,Medium,Medium,75.0,1,0.89,0.22,1.4,East,construction
+evt_test_01,High,High,85.0,1,0.9,0.35,2.5,Central,political_rally
+evt_test_02,Critical,Medium,90.0,0,0.7,0.15,1.8,South,accident

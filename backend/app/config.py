@@ -15,6 +15,15 @@ CSV_PATH = RAW_DATA_DIR / "incidents.csv"
 # Load environment variables
 load_dotenv(dotenv_path=BASE_DIR / ".env")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+ENABLE_GEMINI = os.getenv("ENABLE_GEMINI", "true").strip().lower() in {"1", "true", "yes", "on"}
+AI_CACHE_TTL_SECONDS = int(os.getenv("AI_CACHE_TTL_SECONDS", "300"))
+AI_FAILURE_COOLDOWN_SECONDS = int(os.getenv("AI_FAILURE_COOLDOWN_SECONDS", "30"))
+AI_QUOTA_COOLDOWN_SECONDS = int(os.getenv("AI_QUOTA_COOLDOWN_SECONDS", "120"))
+AI_MAX_COOLDOWN_SECONDS = int(os.getenv("AI_MAX_COOLDOWN_SECONDS", "1800"))
+AI_REQUEST_TIMEOUT_SECONDS = float(os.getenv("AI_REQUEST_TIMEOUT_SECONDS", "10"))
+AI_DEDUPE_WAIT_SECONDS = float(os.getenv("AI_DEDUPE_WAIT_SECONDS", "11"))
+AI_MAX_CACHE_ENTRIES = int(os.getenv("AI_MAX_CACHE_ENTRIES", "256"))
 OSRM_BASE_URL = os.getenv("OSRM_BASE_URL", "http://localhost:5000")
 OSRM_PUBLIC_FALLBACK_URL = "https://routing.openstreetmap.de/routed-car"
 
@@ -30,5 +39,3 @@ JUNCTION_CLASSIFICATIONS = {
     "bellandur": {"class": "collector", "multiplier": 0.8},
     "jp-nagar": {"class": "collector", "multiplier": 0.8},
 }
-
-

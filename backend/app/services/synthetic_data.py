@@ -38,6 +38,13 @@ _INCIDENT_TYPE_WEIGHTS = [0.15, 0.20, 0.10, 0.15, 0.40]
 # Weather weights
 _WEATHER_WEIGHTS = [0.50, 0.25, 0.15, 0.10]
 
+_RECOVERY_WINDOW_MINUTES = {
+    "low": (10, 25),
+    "moderate": (20, 45),
+    "high": (35, 90),
+    "critical": (60, 180),
+}
+
 # Description templates per incident type
 _DESCRIPTIONS: dict[str, list[str]] = {
     "accident": [
@@ -107,6 +114,9 @@ def generate_synthetic_incidents(count: int = 500) -> pd.DataFrame:
             temp = round(rng.uniform(24.0, 38.0), 1)
 
         description = rng.choice(_DESCRIPTIONS[incident_type])
+        recovery_min, recovery_max = _RECOVERY_WINDOW_MINUTES[severity]
+        duration_minutes = rng.randint(recovery_min, recovery_max)
+        closed_dt = ts + timedelta(minutes=duration_minutes)
 
         rows.append({
             "id": f"inc_{uuid.UUID(int=rng.getrandbits(128)).hex[:12]}",
@@ -114,6 +124,8 @@ def generate_synthetic_incidents(count: int = 500) -> pd.DataFrame:
             "incident_type": incident_type,
             "severity": severity,
             "timestamp": ts.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "closed_datetime": closed_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "resolved_datetime": closed_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "weather": weather,
             "temperature_c": temp,
             "description": description,

@@ -32,6 +32,17 @@ JUNCTION_ADJACENCY = {
 }
 
 
+def _row_to_dict(row: object) -> dict:
+    """Convert sqlite3.Row or mapping-like records into a plain dictionary."""
+    if isinstance(row, dict):
+        return row
+
+    try:
+        return dict(row)  # sqlite3.Row supports this and preserves column names
+    except Exception as exc:
+        raise TypeError(f"Expected a mapping-like DB row, got {type(row)!r}") from exc
+
+
 def _get_junction_name_map() -> dict[str, str]:
     """Retrieve mapping of junction_id -> junction_name from DB."""
     with get_cursor() as cur:
@@ -67,7 +78,11 @@ def detect_escalation_alerts(junctions: list[dict], name_map: dict[str, str]) ->
         logger.warning("ML escalation model not available. Falling back to health-score drop heuristic.")
 
     for junction in junctions:
-        j_id = junction["id"]
+        junction_data = _row_to_dict(junction)
+        j_id = junction_data.get("id")
+        if not j_id:
+            logger.warning("Skipping malformed junction row without an id: %r", junction)
+            continue
         j_name = name_map.get(j_id, j_id)
         zone = JUNCTION_ZONES.get(j_id, "Unknown")
 
@@ -99,8 +114,8 @@ def detect_escalation_alerts(junctions: list[dict], name_map: dict[str, str]) ->
                         "event_type": "planned" if event_cause in ("construction", "public_event") else "unplanned",
                         "priority": priority,
                         "requires_road_closure": requires_road_closure,
-                        "latitude": junction.get("lat", 12.9716),
-                        "longitude": junction.get("lng", 77.5946),
+                        "latitude": junction_data.get("lat", 12.9716),
+                        "longitude": junction_data.get("lng", 77.5946),
                         "junction": j_name,
                         "zone": zone,
                         "start_datetime": inc["timestamp"]
@@ -204,7 +219,11 @@ def detect_officer_deficit_alerts(junctions: list[dict], name_map: dict[str, str
     # 1. Sum up recommended officers per zone
     zone_recommendations = {}
     for junction in junctions:
-        j_id = junction["id"]
+        junction_data = _row_to_dict(junction)
+        j_id = junction_data.get("id")
+        if not j_id:
+            logger.warning("Skipping malformed junction row without an id: %r", junction)
+            continue
         zone = JUNCTION_ZONES.get(j_id)
         if not zone:
             continue

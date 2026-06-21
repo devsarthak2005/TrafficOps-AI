@@ -36,7 +36,7 @@ def list_incidents(
 
     query = f"""
         SELECT id, junction_id, incident_type, severity,
-               timestamp, weather, temperature_c, description
+               timestamp, closed_datetime, resolved_datetime, weather, temperature_c, description
         FROM incidents
         {where}
         ORDER BY timestamp DESC
@@ -53,6 +53,8 @@ def list_incidents(
             incident_type=row["incident_type"],
             severity=row["severity"],
             timestamp=row["timestamp"],
+            closed_datetime=row["closed_datetime"],
+            resolved_datetime=row["resolved_datetime"],
             weather=row["weather"],
             temperature_c=row["temperature_c"],
             description=row["description"],
@@ -68,7 +70,7 @@ def get_incident(id: str) -> IncidentResponse:
     
     query = """
         SELECT id, junction_id, incident_type, severity,
-               timestamp, weather, temperature_c, description
+               timestamp, closed_datetime, resolved_datetime, weather, temperature_c, description
         FROM incidents
         WHERE id = ?
     """
@@ -85,6 +87,8 @@ def get_incident(id: str) -> IncidentResponse:
         incident_type=row["incident_type"],
         severity=row["severity"],
         timestamp=row["timestamp"],
+        closed_datetime=row["closed_datetime"],
+        resolved_datetime=row["resolved_datetime"],
         weather=row["weather"],
         temperature_c=row["temperature_c"],
         description=row["description"],
@@ -104,8 +108,8 @@ def create_incident(request: IncidentCreateRequest) -> IncidentResponse:
     with get_cursor() as cur:
         cur.execute(
             """
-            INSERT INTO incidents (id, junction_id, incident_type, severity, timestamp, weather, temperature_c, description)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO incidents (id, junction_id, incident_type, severity, timestamp, closed_datetime, resolved_datetime, weather, temperature_c, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 inc_id,
@@ -113,6 +117,8 @@ def create_incident(request: IncidentCreateRequest) -> IncidentResponse:
                 request.incident_type,
                 request.severity,
                 now_str,
+                None,
+                None,
                 request.weather,
                 request.temperature_c,
                 request.description
@@ -125,9 +131,10 @@ def create_incident(request: IncidentCreateRequest) -> IncidentResponse:
         incident_type=request.incident_type,
         severity=request.severity,
         timestamp=now_str,
+        closed_datetime=None,
+        resolved_datetime=None,
         weather=request.weather,
         temperature_c=request.temperature_c,
         description=request.description
     )
-
 

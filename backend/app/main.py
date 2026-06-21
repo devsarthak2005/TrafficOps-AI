@@ -26,6 +26,7 @@ from .routers.replay import router as replay_router
 from .routers.copilot import router as copilot_router
 from .routers.alerts_router import router as api_alerts_router
 from .routers.learning_router import router as learning_router
+from .routers.stats import router as stats_router
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,10 @@ async def lifespan(app: FastAPI):
         _seed_on_startup()
     else:
         logger.info("Database already populated — skipping seed.")
+    from .services.ingestion import backfill_incident_resolution_timestamps
+    updated = backfill_incident_resolution_timestamps()
+    if updated:
+        logger.info("Backfilled resolution timestamps for %d incidents.", updated)
     yield
 
 app = FastAPI(title=BACKEND_NAME, lifespan=lifespan)
@@ -94,6 +99,7 @@ app.include_router(replay_router)
 app.include_router(copilot_router)
 app.include_router(api_alerts_router, prefix="/api")
 app.include_router(learning_router, prefix="/api")
+app.include_router(stats_router)
 
 
 

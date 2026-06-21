@@ -13,8 +13,13 @@ const AnalyticsMap = dynamic(
 );
 
 export function AnalyticsView() {
-  const { junctions, healthMap } = useMapStore();
+  const { junctions, healthMap, dashboardStats, fetchDashboardStats } = useMapStore();
   const { alerts } = useAlertStore();
+
+  // Fetch stats on mount
+  useEffect(() => {
+    fetchDashboardStats();
+  }, [fetchDashboardStats]);
 
   // 1. Sort junctions by health (worst first) to show a congestion leaderboard
   const congestionLeaderboard = useMemo(() => {
@@ -55,33 +60,35 @@ export function AnalyticsView() {
             </div>
             
             <div className="h-28 w-full relative mt-2">
-              <svg className="w-full h-full" viewBox="0 0 500 100" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="gradient-area" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#2563eb" stopOpacity="0.4" />
-                    <stop offset="100%" stopColor="#2563eb" stopOpacity="0.0" />
-                  </linearGradient>
-                </defs>
-                {/* Area under curve */}
-                <path
-                  d="M 0 100 Q 50 80 100 90 T 200 40 T 300 85 T 400 30 T 500 10 L 500 100 Z"
-                  fill="url(#gradient-area)"
-                />
-                {/* Curve Line */}
-                <path
-                  d="M 0 100 Q 50 80 100 90 T 200 40 T 300 85 T 400 30 T 500 10"
-                  fill="none"
-                  stroke="#3b82f6"
-                  strokeWidth="2.5"
-                />
-                {/* Gridlines */}
-                <line x1="0" y1="20" x2="500" y2="20" stroke="white" strokeOpacity="0.05" strokeDasharray="3" />
-                <line x1="0" y1="50" x2="500" y2="50" stroke="white" strokeOpacity="0.05" strokeDasharray="3" />
-                <line x1="0" y1="80" x2="500" y2="80" stroke="white" strokeOpacity="0.05" strokeDasharray="3" />
-              </svg>
-              {/* Floating Labels */}
-              <span className="absolute left-0 top-0 text-[9px] font-mono text-slate-600">Peak hour spikes</span>
-              <span className="absolute right-0 bottom-0 text-[9px] font-mono text-slate-600">Now (Live)</span>
+              {(() => {
+                const hourly = dashboardStats?.hourly_incident_distribution ?? [];
+                const maxVal = Math.max(...hourly, 1);
+                // Build SVG path from 24 hourly data points
+                const points = hourly.map((v, i) => {
+                  const x = (i / 23) * 500;
+                  const y = 100 - (v / maxVal) * 90;
+                  return `${x},${y}`;
+                });
+                const pathD = points.length > 0 ? `M ${points.join(" L ")}` : "M 0,100 L 500,100";
+                const areaD = points.length > 0 ? `M ${points.join(" L ")} L 500,100 L 0,100 Z` : "M 0,100 L 500,100 Z";
+                return (
+                  <svg className="w-full h-full" viewBox="0 0 500 100" preserveAspectRatio="none">
+                    <defs>
+                      <linearGradient id="gradient-area" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#2563eb" stopOpacity="0.4" />
+                        <stop offset="100%" stopColor="#2563eb" stopOpacity="0.0" />
+                      </linearGradient>
+                    </defs>
+                    <path d={areaD} fill="url(#gradient-area)" />
+                    <path d={pathD} fill="none" stroke="#3b82f6" strokeWidth="2.5" />
+                    <line x1="0" y1="20" x2="500" y2="20" stroke="white" strokeOpacity="0.05" strokeDasharray="3" />
+                    <line x1="0" y1="50" x2="500" y2="50" stroke="white" strokeOpacity="0.05" strokeDasharray="3" />
+                    <line x1="0" y1="80" x2="500" y2="80" stroke="white" strokeOpacity="0.05" strokeDasharray="3" />
+                  </svg>
+                );
+              })()}
+              <span className="absolute left-0 top-0 text-[9px] font-mono text-slate-600">Incident density by hour</span>
+              <span className="absolute right-0 bottom-0 text-[9px] font-mono text-slate-600">0h — 23h</span>
             </div>
           </div>
 
@@ -94,20 +101,18 @@ export function AnalyticsView() {
               </h3>
               
               <div className="flex flex-col gap-2 mt-1">
-                {[
-                  { zone: "Central", risk: 85, color: "bg-red-500/50" },
-                  { zone: "East", risk: 62, color: "bg-orange-500/50" },
-                  { zone: "North", risk: 41, color: "bg-amber-500/50" },
-                  { zone: "South", risk: 29, color: "bg-emerald-500/50" },
-                ].map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between text-xs">
-                    <span className="text-slate-400 w-16">{item.zone}</span>
-                    <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden mx-3">
-                      <div className={`h-full ${item.color} rounded-full`} style={{ width: `${item.risk}%` }} />
+                {(dashboardStats?.zone_risk_levels ?? []).map((item, idx) => {
+                  const color = item.risk >= 70 ? "bg-red-500/50" : item.risk >= 40 ? "bg-orange-500/50" : item.risk >= 20 ? "bg-amber-500/50" : "bg-emerald-500/50";
+                  return (
+                    <div key={idx} className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400 w-16">{item.zone}</span>
+                      <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden mx-3">
+                        <div className={`h-full ${color} rounded-full`} style={{ width: `${item.risk}%` }} />
+                      </div>
+                      <span className="font-semibold text-slate-200">{item.risk}%</span>
                     </div>
-                    <span className="font-semibold text-slate-200">{item.risk}%</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -118,12 +123,7 @@ export function AnalyticsView() {
               </h3>
               
               <div className="flex flex-col gap-2 mt-1">
-                {[
-                  { name: "Breakdowns", count: 4896, pct: 60 },
-                  { name: "Potholes/Weather", count: 995, pct: 15 },
-                  { name: "Road Works", count: 480, pct: 10 },
-                  { name: "Public Events", count: 188, pct: 5 },
-                ].map((item, idx) => (
+                {(dashboardStats?.incident_type_distribution ?? []).map((item, idx) => (
                   <div key={idx} className="flex flex-col gap-0.5 text-xs">
                     <div className="flex justify-between text-slate-300">
                       <span className="text-slate-400">{item.name}</span>
@@ -164,11 +164,11 @@ export function AnalyticsView() {
               </h3>
               
               <div className="flex flex-col gap-2.5 mt-1">
-                {[
-                  { label: "Officers Deployed", pct: 78, desc: "546 / 700 active" },
-                  { label: "Patrol Cars Active", pct: 65, desc: "52 / 80 on route" },
-                  { label: "Barricades Dispatched", pct: 40, desc: "200 / 500 placed" },
-                ].map((item, idx) => (
+                {(dashboardStats?.resource_utilization ?? [
+                  { label: "Officers Deployed", pct: 0, desc: "Loading..." },
+                  { label: "Patrol Cars Active", pct: 0, desc: "Loading..." },
+                  { label: "Barricades Dispatched", pct: 0, desc: "Loading..." },
+                ]).map((item, idx) => (
                   <div key={idx} className="flex flex-col gap-1 text-xs">
                     <div className="flex justify-between text-slate-300">
                       <span className="text-slate-400">{item.label}</span>

@@ -7,10 +7,12 @@ to the incident schema, and writes/upserts into SQLite.
 from __future__ import annotations
 
 import math
+from pathlib import Path
 from typing import Sequence
 
 import pandas as pd
 
+from ..config import CSV_PATH
 from ..db import get_cursor
 from .synthetic_data import JUNCTIONS
 
@@ -117,6 +119,14 @@ def load_incidents_from_csv(path: str) -> pd.DataFrame:
 
     # Parse timestamps
     df["start_datetime"] = pd.to_datetime(df["start_datetime"], errors="coerce", utc=True)
+    if "closed_datetime" in df.columns:
+        df["closed_datetime"] = pd.to_datetime(df["closed_datetime"], errors="coerce", utc=True)
+    else:
+        df["closed_datetime"] = pd.NaT
+    if "resolved_datetime" in df.columns:
+        df["resolved_datetime"] = pd.to_datetime(df["resolved_datetime"], errors="coerce", utc=True)
+    else:
+        df["resolved_datetime"] = pd.NaT
     df = df.dropna(subset=["start_datetime"])
 
     # Map to our schema columns
@@ -129,9 +139,13 @@ def load_incidents_from_csv(path: str) -> pd.DataFrame:
     result["incident_type"] = df.apply(_map_incident_type, axis=1)
     result["severity"] = df.apply(_map_severity, axis=1)
     result["timestamp"] = df["start_datetime"].dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    result["closed_datetime"] = df["closed_datetime"].dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    result["resolved_datetime"] = df["resolved_datetime"].dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     result["weather"] = "clear"
     result["temperature_c"] = 25.0
     result["description"] = df.get("description", "").fillna("").astype(str)
+
+    result = result.where(pd.notna(result), None)
 
     return result.reset_index(drop=True)
 
@@ -154,14 +168,68 @@ def write_to_sqlite(df: pd.DataFrame) -> int:
     with get_cursor() as cur:
         cur.executemany(
             """INSERT OR REPLACE INTO incidents
-               (id, junction_id, incident_type, severity, timestamp, weather, temperature_c, description)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+               (id, junction_id, incident_type, severity, timestamp, closed_datetime, resolved_datetime, weather, temperature_c, description)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             [
                 (
                     r["id"], r["junction_id"], r["incident_type"], r["severity"],
-                    r["timestamp"], r["weather"], r["temperature_c"], r["description"],
+                    r["timestamp"], r.get("closed_datetime"), r.get("resolved_datetime"),
+                    r["weather"], r["temperature_c"], r["description"],
                 )
                 for r in rows
             ],
         )
     return len(rows)
+
+
+def backfill_incident_resolution_timestamps(path: str = str(CSV_PATH)) -> int:
+    """Backfill close/resolution timestamps on existing incidents from the raw CSV.
+
+    Returns the number of SQLite rows updated.
+    """
+    if not Path(path).exists():
+        return 0
+
+    df = pd.read_csv(path, dtype=str, usecols=lambda col: col in {
+        "id",
+        "closed_datetime",
+        "resolved_datetime",
+    })
+
+    if df.empty or "id" not in df.columns:
+        return 0
+
+    for column in ("closed_datetime", "resolved_datetime"):
+        if column not in df.columns:
+            df[column] = pd.NA
+
+    df["closed_datetime"] = pd.to_datetime(df["closed_datetime"], errors="coerce", utc=True)
+    df["resolved_datetime"] = pd.to_datetime(df["resolved_datetime"], errors="coerce", utc=True)
+
+    updates = []
+    for _, row in df.iterrows():
+        closed = row["closed_datetime"]
+        resolved = row["resolved_datetime"]
+        if pd.isna(closed) and pd.isna(resolved):
+            continue
+        updates.append((
+            closed.strftime("%Y-%m-%dT%H:%M:%SZ") if not pd.isna(closed) else None,
+            resolved.strftime("%Y-%m-%dT%H:%M:%SZ") if not pd.isna(resolved) else None,
+            row["id"],
+        ))
+
+    if not updates:
+        return 0
+
+    with get_cursor() as cur:
+        cur.executemany(
+            """
+            UPDATE incidents
+            SET closed_datetime = COALESCE(?, closed_datetime),
+                resolved_datetime = COALESCE(?, resolved_datetime)
+            WHERE id = ?
+            """,
+            updates,
+        )
+
+    return len(updates)

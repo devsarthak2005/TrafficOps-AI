@@ -15,7 +15,7 @@ def test_executive_dashboard_integration():
 
     # 1. Test Demo triggers mapping (e.g. simulating VIP Movement)
     print("\n--- Testing Demo Scenario Trigger: VIP Movement ---")
-    resp_sim = client.post("/api/simulation/start", json={
+    resp_sim = client.post("/simulation/start", json={
         "event_type": "festival",
         "target_type": "junction",
         "target_id": "silk-board",
@@ -97,14 +97,37 @@ def test_executive_dashboard_integration():
     print(f"Commissioner Briefing Mode: {copilot_data['commissioner_briefing']}")
     print(f"Citizen Advisory Mode: {copilot_data['citizen_advisory']}")
 
-    # Stop simulation
-    client.post(f"/api/simulation/stop/{sim_data['simulation_id']}")
+    # 5. Test computed dashboard stats overview endpoint
+    print("\n--- Testing Real Dashboard Stats Overview ---")
+    resp_stats = client.get("/api/stats/overview")
+    assert resp_stats.status_code == 200
+    stats = resp_stats.json()
+    print("Computed Stats Keys:", list(stats.keys()))
+    assert "ml_accuracy_pct" in stats
+    assert "avg_clearance_minutes" in stats
+    assert "avg_response_time_minutes" in stats
+    assert "resource_utilization" in stats
+    assert "zone_risk_levels" in stats
+    assert "city_intelligence" in stats
+    print(f"  ML Accuracy: {stats['ml_accuracy_pct']}%")
+    print(f"  Avg Clearance Time: {stats['avg_clearance_minutes']} mins")
+    print(f"  City Intel: {stats['city_intelligence']}")
 
-    print("\n🎉 ALL EXECUTIVE DASHBOARD WORKFLOWS VERIFIED SUCCESSFULLY!")
+    resp_city = client.get("/api/stats/city-intelligence")
+    assert resp_city.status_code == 200
+    city = resp_city.json()
+    assert "highest_risk_zone" in city
+    assert "active_simulation_count" in city
+    print(f"  City Intelligence Hotspots: {city.get('active_simulation_hotspots', [])}")
+
+    # Stop simulation
+    client.delete(f"/simulation/{sim_data['simulation_id']}")
+
+    print("\nALL EXECUTIVE DASHBOARD WORKFLOWS VERIFIED SUCCESSFULLY!")
 
 if __name__ == "__main__":
     try:
         test_executive_dashboard_integration()
     except Exception as e:
-        print(f"\n❌ Verification encountered error: {e}")
+        print(f"\nVerification encountered error: {e}")
         sys.exit(1)

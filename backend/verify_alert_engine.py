@@ -37,8 +37,9 @@ def test_alert_engine():
         affected_junction_ids = ["silk-board", "bellandur"]
         event_type = "festival"
 
-    original_get_active = simulation_engine.get_active_simulations
-    simulation_engine.get_active_simulations = lambda: [MockSim()]
+    import app.services.alert_service as alert_service
+    original_get_active = alert_service.get_active_simulations
+    alert_service.get_active_simulations = lambda: [MockSim()]
 
     generated = generate_predictive_alerts()
     print(f"Generated {len(generated)} alerts for Medium simulation.")
@@ -104,7 +105,7 @@ def test_alert_engine():
     print("✅ POST /api/alerts/resolve works.")
 
     # Restore original mock
-    simulation_engine.get_active_simulations = original_get_active
+    alert_service.get_active_simulations = original_get_active
     print("\n🎉 ALL ALERT ENGINE VERIFICATION TESTS PASSED!")
 
 if __name__ == "__main__":
