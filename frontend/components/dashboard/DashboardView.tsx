@@ -128,7 +128,7 @@ export function DashboardView() {
     }
 
     try {
-      // Step A. Trigger Simulation
+      // Initialize simulation for the target area under the selected scenario.
       await startSimulation({
         event_type: scenario === "rally" || scenario === "sports" ? "festival" : "accident",
         target_type: "junction",
@@ -136,7 +136,7 @@ export function DashboardView() {
         intensity: intensity
       });
 
-      // Step B. Trigger Prediction
+      // Call the ML models to predict event severity and impact.
       const predRes = await predictImpact({
         event_cause: eventCause,
         event_type: scenario === "rally" || scenario === "sports" ? "planned" : "unplanned",
@@ -186,7 +186,7 @@ export function DashboardView() {
         recovery_time: recoveryRes.duration_minutes
       });
 
-      // Step C. Trigger Resource Allocation Optimization
+      // Optimize resource allocation based on predicted impact.
       const optPlan = await optimizeAllocation({
         impact_level: predRes.predicted_impact,
         confidence: predRes.confidence,
@@ -202,7 +202,7 @@ export function DashboardView() {
       });
 
 
-      // Step D. Trigger Diversion Planning
+      // Generate diversion routes for the affected junctions.
       await generateDiversions({
         event_location: targetId,
         predicted_impact_level: predRes.predicted_impact,
@@ -211,7 +211,7 @@ export function DashboardView() {
         event_attendance: scenario === "rally" ? 12000 : scenario === "sports" ? 25000 : 500
       });
 
-      // Step E. Trigger Briefing
+      // Generate the executive text briefing.
       await generateBriefing({
         prediction: {
           impact_level: predRes.predicted_impact,
@@ -269,7 +269,7 @@ export function DashboardView() {
     ];
 
     try {
-      // Step 1: Event Created
+      // Phase 1: Set event status and initiate simulation.
       setCurrentStep(0);
       await new Promise((resolve) => setTimeout(resolve, 800));
       await startSimulation({
@@ -279,7 +279,7 @@ export function DashboardView() {
         intensity: "high"
       });
 
-      // Step 2: ML Prediction
+      // Phase 2: Compute impact, recovery, and risk estimations.
       setCurrentStep(1);
       await new Promise((resolve) => setTimeout(resolve, 800));
       const predRes = await predictImpact({
@@ -331,7 +331,7 @@ export function DashboardView() {
         recovery_time: recoveryRes.duration_minutes
       });
 
-      // Step 3: Resource Optimization
+      // Phase 3: Execute resource allocation calculations.
       setCurrentStep(2);
       await new Promise((resolve) => setTimeout(resolve, 800));
       const optPlan = await optimizeAllocation({
@@ -349,7 +349,7 @@ export function DashboardView() {
       });
 
 
-      // Step 4: Diversion Planning
+      // Phase 4: Identify routing bypasses and diversion options.
       setCurrentStep(3);
       await new Promise((resolve) => setTimeout(resolve, 800));
       await generateDiversions({
@@ -360,12 +360,12 @@ export function DashboardView() {
         event_attendance: 15000
       });
 
-      // Step 5: Alert Generation
+      // Phase 5: Fetch sensor warning alerts.
       setCurrentStep(4);
       await new Promise((resolve) => setTimeout(resolve, 800));
       await fetchAlerts();
 
-      // Step 6: AI Briefing
+      // Phase 6: Generate the synthesised AI briefing.
       setCurrentStep(5);
       await new Promise((resolve) => setTimeout(resolve, 800));
       await generateBriefing({

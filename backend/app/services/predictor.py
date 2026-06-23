@@ -69,7 +69,7 @@ class PredictorService:
 
         models_dir = os.path.abspath(os.path.join(current_dir, "..", "..", "models"))
         
-        # 1. Load Severity Classifier
+        # Load and initialize the main event severity classification model.
         preprocessor_path = os.path.join(models_dir, "severity_preprocessor.joblib")
         model_path = os.path.join(models_dir, "severity_model.joblib")
 
@@ -90,7 +90,7 @@ class PredictorService:
             self.load_error = e
             logger.exception("Failed to load ML severity model.")
 
-        # 2. Load Recovery Time Regressor
+        # Load and initialize the recovery time regression model.
         recovery_preprocessor_path = os.path.join(models_dir, "recovery_time_preprocessor.joblib")
         recovery_model_path = os.path.join(models_dir, "recovery_time_model.joblib")
 
@@ -110,7 +110,7 @@ class PredictorService:
             self.load_error_recovery = e
             logger.exception("Failed to load ML recovery model.")
 
-        # 3. Load Escalation Classifier
+        # Load and initialize the escalation risk classification model.
         escalation_preprocessor_path = os.path.join(models_dir, "escalation_preprocessor.joblib")
         escalation_model_path = os.path.join(models_dir, "escalation_model.joblib")
         escalation_freq_map_path = os.path.join(models_dir, "escalation_freq_map.json")
@@ -160,7 +160,7 @@ class PredictorService:
         import numpy as np
         import xgboost as xgb
 
-        # 1. Prepare raw inputs into a DataFrame
+        # Construct dataframe representation of event features
         input_df = pd.DataFrame([{
             'event_cause': request_data.get('event_cause', 'Unknown'),
             'event_type': request_data.get('event_type', 'unplanned'),
@@ -172,11 +172,9 @@ class PredictorService:
         }])
 
         try:
-            # 2. Transform using preprocessor
             X_trans = self.preprocessor.transform(input_df)
 
-            # 3. Predict class and probabilities
-            # Classes: Low (0), Medium (1), High (2), Critical (3)
+            # Class index mappings: Low (0), Medium (1), High (2), Critical (3)
             target_names = ['Low', 'Medium', 'High', 'Critical']
             probs = self.model.predict_proba(X_trans)[0]
             pred_idx = int(self.model.predict(X_trans)[0])
@@ -184,15 +182,14 @@ class PredictorService:
             predicted_impact = target_names[pred_idx]
             confidence = float(probs[pred_idx])
 
-            # 4. Extract local contributions using pred_contribs
+            # Calculate Shapley-like local contributions from the XGBoost booster margin
             booster = self.model.get_booster()
             dmat = xgb.DMatrix(X_trans)
             contribs = booster.predict(dmat, pred_contribs=True)[0]  # Shape: (n_classes, n_features + 1)
             
             class_contribs = contribs[pred_idx]
-            feature_contribs = class_contribs[:-1]  # Exclude the bias element at the end
+            feature_contribs = class_contribs[:-1]
 
-            # 5. Define human-readable labels
             feature_descriptions = {
                 'num__latitude': 'High-risk corridor',
                 'num__longitude': 'Historical congestion zone',
@@ -314,7 +311,7 @@ class PredictorService:
                     reasons_formatted = []
                 reasons_formatted.insert(0, f"Multi-event collision detected (x{multiplier} multiplier)")
 
-            # 6. Generate human-readable explanation matching the requested format
+            # Format the predictions and structured reasons into a human-readable explanation.
             explanation_lines = [
                 f"Predicted Impact: {predicted_impact}",
                 f"Confidence: {int(round(confidence * 100))}%",

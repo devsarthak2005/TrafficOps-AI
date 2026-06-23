@@ -1,17 +1,11 @@
 from __future__ import annotations
 
-import os
 import csv
 import logging
 from datetime import datetime, timezone
-from typing import List, Dict, Any
+from typing import Any
 
-import joblib
 import pandas as pd
-import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.utils.class_weight import compute_sample_weight
-from xgboost import XGBClassifier
 
 from ..config import BASE_DIR
 from ..schemas.learning import FeedbackItem, AnalyticsResponse, ZoneInsight, RetrainResponse
@@ -34,7 +28,6 @@ def initialize_feedback_dataset() -> None:
             writer = csv.writer(f)
             writer.writerow(headers)
 
-            # Write high-fidelity historical mock data for trends
             mock_data = [
                 ["evt_001", "Critical", "Critical", 91.0, 1, 0.85, 0.42, 3.8, "Central", "political_rally"],
                 ["evt_002", "Medium", "Medium", 72.0, 1, 0.90, 0.25, 1.5, "South", "construction"],
@@ -78,7 +71,6 @@ def calculate_learning_analytics() -> AnalyticsResponse:
             zone_insights=[], ai_insights=[]
         )
 
-    # Convert columns to numeric
     df["prediction_correct"] = pd.to_numeric(df["prediction_correct"])
     df["resource_efficiency"] = pd.to_numeric(df["resource_efficiency"])
     df["diversion_success"] = pd.to_numeric(df["diversion_success"])
@@ -88,7 +80,6 @@ def calculate_learning_analytics() -> AnalyticsResponse:
     avg_resource = float(df["resource_efficiency"].mean() * 100)
     avg_diversion = float(df["diversion_success"].mean() * 100)
 
-    # Model Drift: compare first 50% events accuracy vs last 50% events accuracy
     half = total_events // 2
     if half > 0:
         old_acc = df.iloc[:half]["prediction_correct"].mean()
@@ -97,7 +88,6 @@ def calculate_learning_analytics() -> AnalyticsResponse:
     else:
         drift = 0.0
 
-    # Zone insights
     zone_groups = df.groupby("zone")
     zone_insights_list = []
     for zone_name, group in zone_groups:
@@ -109,9 +99,7 @@ def calculate_learning_analytics() -> AnalyticsResponse:
             )
         )
 
-    # AI Insights generation based on historical CSV stats
     ai_insights = []
-    # Identify high resolution time causes
     cause_groups = df.groupby(["event_cause", "zone"])["resolution_time"].mean().reset_index()
     if not cause_groups.empty:
         max_row = cause_groups.loc[cause_groups["resolution_time"].idxmax()]
@@ -121,7 +109,6 @@ def calculate_learning_analytics() -> AnalyticsResponse:
             f"{cause_title} in {max_row['zone']} Zone have historically resulted in longer congestion durations (avg. {avg_res:.1f} hours)."
         )
 
-    # General learning insight
     ai_insights.append(
         f"Model retraining successfully corrected {len(df[df['prediction_correct'] == 1])} target paths, raising accuracy."
     )
@@ -140,10 +127,9 @@ def calculate_learning_analytics() -> AnalyticsResponse:
 def trigger_model_retraining() -> RetrainResponse:
     """Retrains all ML models using the continuous retraining pipeline and hot-reloads the predictor."""
     models_dir = BASE_DIR / "models"
-    old_accuracy = 56.4  # baseline default
+    old_accuracy = 56.4
     new_accuracy = 75.0
 
-    # 1. Execute the retraining pipeline (this performs model selection across LR, RF, XGBoost)
     try:
         from ml.pipeline.retrain import main as run_retrain
         run_retrain()
@@ -156,7 +142,6 @@ def trigger_model_retraining() -> RetrainResponse:
             timestamp=datetime.now(timezone.utc).isoformat()
         )
 
-    # 2. Hot-reload the singleton in memory
     try:
         from .predictor import predictor_service
         predictor_service._load_models()
@@ -164,7 +149,6 @@ def trigger_model_retraining() -> RetrainResponse:
     except Exception as re:
         logger.error(f"Failed to hot-reload models: {re}")
 
-    # 3. Read the evaluation metrics from the retraining log
     metrics_log_path = models_dir / "mlflow_light_metrics.json"
     if metrics_log_path.exists():
         try:

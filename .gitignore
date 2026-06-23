@@ -12,3 +12,6 @@ backend/data/raw/
 .DS_Store
 Thumbs.db
 backend/.env
+frontend-dom.txt
+frontend-phase2-dom.txt
+CONVENTIONS.md
