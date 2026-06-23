@@ -38,7 +38,7 @@ export function MLPredictionPanel() {
   }[predicted_impact];
 
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-white/10 bg-panel p-5 text-sm backdrop-blur-md h-full justify-between shadow-lg">
+    <div className="flex flex-col gap-4 rounded-xl border border-white/10 bg-panel p-5 text-sm backdrop-blur-md h-full overflow-y-auto pr-2 shadow-lg">
       
       {/* Header Info */}
       <div className="flex justify-between items-center border-b border-white/10 pb-3">
